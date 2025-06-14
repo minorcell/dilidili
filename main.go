@@ -14,8 +14,17 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 )
+
+type VideoInfo struct {
+	Code int `json:"code"`
+	Data struct {
+		Title string `json:"title"`
+		Cid   int    `json:"cid"`
+	} `json:"data"`
+}
 
 type PlayURLResponse struct {
 	Data struct {
@@ -30,6 +39,18 @@ type PlayURLResponse struct {
 	} `json:"data"`
 }
 
+type DownloadProgress struct {
+	videoProgress   *widget.ProgressBar
+	audioProgress   *widget.ProgressBar
+	overallProgress *widget.ProgressBar
+	statusLabel     *widget.Label
+	saveButton      *widget.Button
+	tempVideoPath   string
+	tempAudioPath   string
+	videoTitle      string
+	bvid            string
+}
+
 func main() {
 	a := app.New()
 	w := a.NewWindow("B站视频下载器")
@@ -37,29 +58,57 @@ func main() {
 	entry := widget.NewEntry()
 	entry.SetPlaceHolder("输入 B 站 BV 号或视频链接")
 
-	logs := widget.NewMultiLineEntry()
-	// logs.SetReadOnly(true)
+	// 创建进度显示组件
+	statusLabel := widget.NewLabel("准备就绪")
+	videoProgress := widget.NewProgressBar()
+	audioProgress := widget.NewProgressBar()
+	overallProgress := widget.NewProgressBar()
 
-	btn := widget.NewButton("下载并合并", func() {
+	videoLabel := widget.NewLabel("视频进度:")
+	audioLabel := widget.NewLabel("音频进度:")
+	overallLabel := widget.NewLabel("总体进度:")
+
+	saveButton := widget.NewButton("保存文件", nil)
+	saveButton.Hide() // 初始隐藏
+
+	progressContainer := container.NewVBox(
+		statusLabel,
+		videoLabel, videoProgress,
+		audioLabel, audioProgress,
+		overallLabel, overallProgress,
+		saveButton,
+	)
+
+	downloadProgress := &DownloadProgress{
+		videoProgress:   videoProgress,
+		audioProgress:   audioProgress,
+		overallProgress: overallProgress,
+		statusLabel:     statusLabel,
+		saveButton:      saveButton,
+	}
+
+	btn := widget.NewButton("开始下载", func() {
 		bvid := extractBVID(entry.Text)
 		if bvid == "" {
-			logs.SetText("请输入正确的BV号或链接")
+			dialog.ShowError(fmt.Errorf("请输入正确的BV号或链接"), w)
 			return
 		}
-		logs.SetText("开始下载...\n")
+
+		downloadProgress.bvid = bvid
+		downloadProgress.statusLabel.SetText("正在获取视频信息...")
+		downloadProgress.saveButton.Hide()
+
 		go func() {
-			err := downloadAndMerge(bvid, logs)
+			err := downloadAndMerge(bvid, downloadProgress, w)
 			if err != nil {
-				appendLog(logs, fmt.Sprintf("错误: %v\n", err))
-			} else {
-				appendLog(logs, "下载并合并完成！\n")
+				downloadProgress.statusLabel.SetText(fmt.Sprintf("错误: %v", err))
 			}
 		}()
 	})
 
-	content := container.NewVBox(entry, btn, logs)
+	content := container.NewVBox(entry, btn, progressContainer)
 	w.SetContent(content)
-	w.Resize(fyne.NewSize(600, 400))
+	w.Resize(fyne.NewSize(600, 450))
 	w.ShowAndRun()
 }
 
@@ -80,16 +129,19 @@ func extractBVID(input string) string {
 	return ""
 }
 
-func downloadAndMerge(bvid string, logs *widget.Entry) error {
-	appendLog(logs, fmt.Sprintf("解析视频信息: %s\n", bvid))
+func downloadAndMerge(bvid string, downloadProgress *DownloadProgress, w fyne.Window) error {
+	downloadProgress.statusLabel.SetText("正在获取视频信息...")
 
-	cid, err := getCID(bvid)
+	// 获取视频信息（包含标题）
+	videoInfo, err := getVideoInfo(bvid)
 	if err != nil {
-		return fmt.Errorf("获取CID失败: %w", err)
+		return fmt.Errorf("获取视频信息失败: %w", err)
 	}
-	appendLog(logs, fmt.Sprintf("CID: %d\n", cid))
 
-	playURL, err := getPlayURL(bvid, cid)
+	downloadProgress.videoTitle = videoInfo.Data.Title
+	downloadProgress.statusLabel.SetText(fmt.Sprintf("获取到视频: %s", videoInfo.Data.Title))
+
+	playURL, err := getPlayURL(bvid, videoInfo.Data.Cid)
 	if err != nil {
 		return fmt.Errorf("获取播放地址失败: %w", err)
 	}
@@ -97,71 +149,197 @@ func downloadAndMerge(bvid string, logs *widget.Entry) error {
 	videoURL := playURL.Data.Dash.Video[0].BaseURL
 	audioURL := playURL.Data.Dash.Audio[0].BaseURL
 
-	os.MkdirAll("output", 0755)
+	os.MkdirAll("temp", 0755)
 
-	videoPath := filepath.Join("output", bvid+"_video.m4s")
-	audioPath := filepath.Join("output", bvid+"_audio.m4s")
-	outputPath := filepath.Join("output", bvid+"_final.mp4")
+	videoPath := filepath.Join("temp", bvid+"_video.m4s")
+	audioPath := filepath.Join("temp", bvid+"_audio.m4s")
+
+	downloadProgress.tempVideoPath = videoPath
+	downloadProgress.tempAudioPath = audioPath
 
 	var wg sync.WaitGroup
 	wg.Add(2)
 
+	// 重置进度条
+	downloadProgress.videoProgress.SetValue(0)
+	downloadProgress.audioProgress.SetValue(0)
+	downloadProgress.overallProgress.SetValue(0)
+
 	go func() {
 		defer wg.Done()
-		appendLog(logs, "开始下载视频流...\n")
-		if err := downloadFile(videoURL, videoPath, logs); err != nil {
-			appendLog(logs, fmt.Sprintf("视频下载失败: %v\n", err))
-		} else {
-			appendLog(logs, "视频下载完成\n")
+		downloadProgress.statusLabel.SetText("正在下载视频流...")
+		if err := downloadFileWithProgress(videoURL, videoPath, downloadProgress.videoProgress); err != nil {
+			downloadProgress.statusLabel.SetText(fmt.Sprintf("视频下载失败: %v", err))
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		appendLog(logs, "开始下载音频流...\n")
-		if err := downloadFile(audioURL, audioPath, logs); err != nil {
-			appendLog(logs, fmt.Sprintf("音频下载失败: %v\n", err))
-		} else {
-			appendLog(logs, "音频下载完成\n")
+		downloadProgress.statusLabel.SetText("正在下载音频流...")
+		if err := downloadFileWithProgress(audioURL, audioPath, downloadProgress.audioProgress); err != nil {
+			downloadProgress.statusLabel.SetText(fmt.Sprintf("音频下载失败: %v", err))
 		}
 	}()
 
 	wg.Wait()
 
-	appendLog(logs, "开始合并音视频...\n")
+	downloadProgress.statusLabel.SetText("正在合并音视频...")
+	downloadProgress.overallProgress.SetValue(0.8)
+
+	outputPath := filepath.Join("temp", bvid+"_merged.mp4")
 	if err := mergeFiles(videoPath, audioPath, outputPath); err != nil {
 		return fmt.Errorf("合并失败: %w", err)
 	}
 
-	appendLog(logs, "合并成功，文件路径："+outputPath+"\n")
+	downloadProgress.overallProgress.SetValue(1.0)
+	downloadProgress.statusLabel.SetText("下载完成！点击保存文件选择保存位置")
+
+	// 设置保存按钮的回调
+	downloadProgress.saveButton.OnTapped = func() {
+		saveFile(outputPath, downloadProgress.videoTitle, downloadProgress.tempVideoPath, downloadProgress.tempAudioPath, w)
+	}
+	downloadProgress.saveButton.Show()
+
 	return nil
 }
 
-func appendLog(logs *widget.Entry, text string) {
-	// 线程安全地追加日志
-	fyne.CurrentApp().SendNotification(&fyne.Notification{Title: "下载进度", Content: text})
-	logs.SetText(logs.Text + text)
-}
-
-func getCID(bvid string) (int, error) {
+// 获取视频详细信息
+func getVideoInfo(bvid string) (*VideoInfo, error) {
 	url := fmt.Sprintf("https://api.bilibili.com/x/web-interface/view?bvid=%s", bvid)
 	resp, err := http.Get(url)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	var result struct {
-		Data struct {
-			Cid int `json:"cid"`
-		} `json:"data"`
-	}
-
+	var result VideoInfo
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	return result.Data.Cid, nil
+	if result.Code != 0 {
+		return nil, fmt.Errorf("API返回错误，代码: %d", result.Code)
+	}
+
+	return &result, nil
+}
+
+// 带进度的文件下载
+func downloadFileWithProgress(url, filename string, progressBar *widget.ProgressBar) error {
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
+	req.Header.Set("Referer", "https://www.bilibili.com/")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	out, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	// 获取文件总大小
+	totalSize := resp.ContentLength
+	var downloaded int64 = 0
+
+	buf := make([]byte, 32*1024)
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			if _, werr := out.Write(buf[:n]); werr != nil {
+				return werr
+			}
+			downloaded += int64(n)
+
+			// 更新进度条
+			if totalSize > 0 {
+				progress := float64(downloaded) / float64(totalSize)
+				progressBar.SetValue(progress)
+			}
+		}
+		if err != nil {
+			if err == io.EOF {
+				progressBar.SetValue(1.0)
+				break
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+// 保存文件对话框
+func saveFile(tempPath, videoTitle, tempVideoPath, tempAudioPath string, w fyne.Window) {
+	// 清理文件名中的非法字符
+	safeTitle := strings.ReplaceAll(videoTitle, "/", "_")
+	safeTitle = strings.ReplaceAll(safeTitle, "\\", "_")
+	safeTitle = strings.ReplaceAll(safeTitle, ":", "_")
+	safeTitle = strings.ReplaceAll(safeTitle, "*", "_")
+	safeTitle = strings.ReplaceAll(safeTitle, "?", "_")
+	safeTitle = strings.ReplaceAll(safeTitle, "\"", "_")
+	safeTitle = strings.ReplaceAll(safeTitle, "<", "_")
+	safeTitle = strings.ReplaceAll(safeTitle, ">", "_")
+	safeTitle = strings.ReplaceAll(safeTitle, "|", "_")
+
+	defaultName := fmt.Sprintf("%s.mp4", safeTitle)
+
+	saveDialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
+		if err != nil {
+			dialog.ShowError(err, w)
+			return
+		}
+		if writer == nil {
+			return // 用户取消了保存
+		}
+		defer writer.Close()
+
+		// 读取临时文件
+		tempFile, err := os.Open(tempPath)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("无法打开临时文件: %w", err), w)
+			return
+		}
+		defer tempFile.Close()
+
+		// 拷贝文件内容
+		if _, err := io.Copy(writer, tempFile); err != nil {
+			dialog.ShowError(fmt.Errorf("保存文件失败: %w", err), w)
+			return
+		}
+
+		// 清理所有临时文件
+		cleanupTempFiles(tempPath, tempVideoPath, tempAudioPath)
+
+		dialog.ShowInformation("保存成功", "视频已成功保存到指定位置！", w)
+	}, w)
+
+	// 设置默认文件名
+	saveDialog.SetFileName(defaultName)
+	saveDialog.Show()
+}
+
+// 清理临时文件
+func cleanupTempFiles(mergedPath, videoPath, audioPath string) {
+	// 删除合并后的临时文件
+	os.Remove(mergedPath)
+
+	// 删除视频临时文件
+	os.Remove(videoPath)
+
+	// 删除音频临时文件
+	os.Remove(audioPath)
+
+	// 尝试删除temp目录（如果为空的话）
+	os.Remove("temp")
 }
 
 func getPlayURL(bvid string, cid int) (*PlayURLResponse, error) {
@@ -183,46 +361,6 @@ func getPlayURL(bvid string, cid int) (*PlayURLResponse, error) {
 	}
 
 	return &result, nil
-}
-
-func downloadFile(url, filename string, logs *widget.Entry) error {
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
-	req.Header.Set("Referer", "https://www.bilibili.com/")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	out, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	buf := make([]byte, 32*1024)
-	for {
-		n, err := resp.Body.Read(buf)
-		if n > 0 {
-			if _, werr := out.Write(buf[:n]); werr != nil {
-				return werr
-			}
-		}
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return err
-		}
-	}
-
-	return nil
 }
 
 func mergeFiles(videoPath, audioPath, outputPath string) error {
