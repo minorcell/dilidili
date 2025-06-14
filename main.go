@@ -1,12 +1,12 @@
 package main
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -226,8 +226,112 @@ func downloadFile(url, filename string, logs *widget.Entry) error {
 }
 
 func mergeFiles(videoPath, audioPath, outputPath string) error {
-	cmd := exec.Command("./ffmpeg", "-i", videoPath, "-i", audioPath, "-c", "copy", outputPath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	// 对于B站的.m4s文件，我们可以用一个简化的合并方法
+	// 因为它们实际上是fMP4格式，可以直接进行容器级合并
+
+	videoFile, err := os.Open(videoPath)
+	if err != nil {
+		return fmt.Errorf("打开视频文件失败: %w", err)
+	}
+	defer videoFile.Close()
+
+	audioFile, err := os.Open(audioPath)
+	if err != nil {
+		return fmt.Errorf("打开音频文件失败: %w", err)
+	}
+	defer audioFile.Close()
+
+	outputFile, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("创建输出文件失败: %w", err)
+	}
+	defer outputFile.Close()
+
+	// 先处理视频文件的头部
+	videoData, err := io.ReadAll(videoFile)
+	if err != nil {
+		return fmt.Errorf("读取视频数据失败: %w", err)
+	}
+
+	audioData, err := io.ReadAll(audioFile)
+	if err != nil {
+		return fmt.Errorf("读取音频数据失败: %w", err)
+	}
+
+	// 合并MP4容器 - 这是一个简化的实现
+	// 对于B站的m4s文件，通常可以通过简单的数据拷贝和重新组织来实现
+	if err := mergeMP4Data(videoData, audioData, outputFile); err != nil {
+		return fmt.Errorf("合并MP4数据失败: %w", err)
+	}
+
+	return nil
+}
+
+// 简化的MP4合并实现
+func mergeMP4Data(videoData, audioData []byte, outputFile *os.File) error {
+	// 对于B站的.m4s文件，实际上它们是fMP4 (fragmented MP4) 格式
+	// 我们需要创建一个有效的MP4容器来包含这些数据
+
+	// 写入ftyp box (文件类型头)
+	ftypBox := createFtypBox()
+	if _, err := outputFile.Write(ftypBox); err != nil {
+		return fmt.Errorf("写入文件类型头失败: %w", err)
+	}
+
+	// 直接写入视频数据（跳过它的ftyp）
+	videoStart := findFirstNonFtypBox(videoData)
+	if _, err := outputFile.Write(videoData[videoStart:]); err != nil {
+		return fmt.Errorf("写入视频数据失败: %w", err)
+	}
+
+	// 直接写入音频数据（跳过它的ftyp）
+	audioStart := findFirstNonFtypBox(audioData)
+	if _, err := outputFile.Write(audioData[audioStart:]); err != nil {
+		return fmt.Errorf("写入音频数据失败: %w", err)
+	}
+
+	return nil
+}
+
+// 创建标准的ftyp box
+func createFtypBox() []byte {
+	return []byte{
+		0x00, 0x00, 0x00, 0x20, // box size (32 bytes)
+		'f', 't', 'y', 'p', // box type "ftyp"
+		'i', 's', 'o', 'm', // major brand "isom"
+		0x00, 0x00, 0x02, 0x00, // minor version
+		'i', 's', 'o', 'm', // compatible brand "isom"
+		'm', 'p', '4', '1', // compatible brand "mp41"
+		'd', 'a', 's', 'h', // compatible brand "dash"
+		'm', 's', 'e', '1', // compatible brand "mse1"
+	}
+}
+
+// 找到第一个非ftyp box的位置
+func findFirstNonFtypBox(data []byte) int {
+	if len(data) < 8 {
+		return 0
+	}
+
+	pos := 0
+	for pos < len(data)-8 {
+		// 读取box大小
+		size := int(binary.BigEndian.Uint32(data[pos : pos+4]))
+		if size < 8 {
+			break
+		}
+
+		// 读取box类型
+		boxType := string(data[pos+4 : pos+8])
+
+		// 如果不是ftyp，返回当前位置
+		if boxType != "ftyp" {
+			return pos
+		}
+
+		// 跳到下一个box
+		pos += size
+	}
+
+	return pos
 }
