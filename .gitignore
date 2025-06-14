@@ -1,0 +1,94 @@
+# 构建产物
+build/
+dist/
+*.app
+*.dmg
+
+# 临时文件
+.DS_Store
+.vscode/
+.idea/
+.cursorrules
+
+# Go相关
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+
+# 依赖缓存
+vendor/
+
+# IDE/编辑器文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS系统文件
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+# macOS缩略图
+._*
+
+# macOS Spotlight
+.Spotlight-V100
+.Trashes
+
+# macOS文件夹属性
+.fseventsd
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# 临时文件
+*.tmp
+*.temp
+.tmp/
+temp/
+
+# 日志文件
+*.log
+logs/
+
+# 测试文件
+test_*
+*_test_*
+
+# 本地配置
+.env
+.env.local
+config.local.*
+
+# 备份文件
+*.bak
+*.backup
+
+# FFmpeg二进制（保留在resources目录中，但忽略其他位置的）
+/ffmpeg
+ffmpeg.zip
+
+# 开发时的临时文件
+debug
+debug.test
+*.prof
+
+# 压缩文件
+*.zip
+*.tar.gz
+*.rar 
