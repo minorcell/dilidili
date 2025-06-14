@@ -8,6 +8,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
@@ -97,6 +98,7 @@ func sanitizeFileName(name string) string {
 // Run 启动 GUI
 func Run() {
 	a := app.New()
+	a.SetIcon(resourceLogoPng)
 	w := a.NewWindow("B站视频下载器")
 
 	ui := &downloadUI{
@@ -130,7 +132,20 @@ func Run() {
 	})
 	ui.downloadBtn = downloadBtn
 
+	// 创建logo图像
+	logoImg := canvas.NewImageFromResource(resourceLogoPng)
+	logoImg.FillMode = canvas.ImageFillContain
+	logoImg.Resize(fyne.NewSize(80, 80))
+
+	// 创建标题容器
+	titleContainer := container.NewHBox(
+		logoImg,
+		widget.NewLabel("Dilidili - B站视频下载器"),
+	)
+
 	content := container.NewVBox(
+		titleContainer,
+		widget.NewSeparator(),
 		ui.entry,
 		downloadBtn,
 		ui.statusLabel,
@@ -140,6 +155,6 @@ func Run() {
 		ui.saveBtn,
 	)
 	w.SetContent(content)
-	w.Resize(fyne.NewSize(600, 450))
+	w.Resize(fyne.NewSize(600, 500))
 	w.ShowAndRun()
 }

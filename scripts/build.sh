@@ -41,6 +41,15 @@ else
     exit 1
 fi
 
+# 复制应用图标
+echo "🎨 添加应用图标..."
+if [ -f "build/Dilidili.icns" ]; then
+    cp "build/Dilidili.icns" "$BUILD_DIR/$APP_NAME.app/Contents/Resources/app.icns"
+    echo "✅ 应用图标已添加"
+else
+    echo "⚠️ 警告: 未找到应用图标文件"
+fi
+
 # 设置可执行权限
 echo "🔐 设置可执行权限..."
 chmod +x "$BUILD_DIR/$APP_NAME.app/Contents/MacOS/$APP_NAME"
@@ -60,7 +69,7 @@ cat > "$BUILD_DIR/$APP_NAME.app/Contents/Info.plist" << EOF
     <key>CFBundleName</key>
     <string>$APP_NAME</string>
     <key>CFBundleDisplayName</key>
-    <string>$APP_NAME</string>
+    <string>Dilidili</string>
     <key>CFBundleVersion</key>
     <string>1.0.0</string>
     <key>CFBundleShortVersionString</key>
@@ -69,12 +78,19 @@ cat > "$BUILD_DIR/$APP_NAME.app/Contents/Info.plist" << EOF
     <string>APPL</string>
     <key>CFBundleSignature</key>
     <string>DILI</string>
+    <key>CFBundleIconFile</key>
+    <string>app</string>
     <key>LSMinimumSystemVersion</key>
     <string>10.15</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>LSApplicationCategoryType</key>
-    <string>public.app-category.video</string>
+    <string>public.app-category.utilities</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
 </dict>
 </plist>
 EOF
