@@ -59,14 +59,14 @@ func DownloadAndMerge(bvid string, handler ProgressHandler) error {
 		defer wg.Done()
 		handler.SetStatus("正在下载视频流...")
 		if err := downloadFileWithProgress(videoURL, videoPath, handler.SetVideoProgress); err != nil {
-			handler.SetStatus(fmt.Sprintf("视频下载失败: %v", err))
+			handler.SetStatus("视频下载失败")
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		handler.SetStatus("正在下载音频流...")
 		if err := downloadFileWithProgress(audioURL, audioPath, handler.SetAudioProgress); err != nil {
-			handler.SetStatus(fmt.Sprintf("音频下载失败: %v", err))
+			handler.SetStatus("音频下载失败")
 		}
 	}()
 	wg.Wait()
