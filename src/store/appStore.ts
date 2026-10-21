@@ -11,6 +11,7 @@ interface AppState {
     addDownloadItem: (item: DownloadItem) => void;
     updateDownloadProgress: (id: string, progress: number) => void;
     updateDownloadStatus: (id: string, status: 'pending' | 'downloading' | 'completed' | 'failed') => void;
+    setDownloadFilePath: (id: string, filePath?: string) => void;
     logout: () => void;
     loadLoginData: () => Promise<void>;
     saveLoginData: () => Promise<void>;
@@ -43,6 +44,11 @@ export const useAppStore = create<AppState>((set, get) => ({
             item.id === id ? { ...item, status } : item
         )
     })),
+    setDownloadFilePath: (id, filePath) => set((state) => ({
+        downloads: state.downloads.map(item =>
+            item.id === id ? { ...item, filePath } : item
+        )
+    })),
     logout: async () => {
         set({
             isLoggedIn: false,
@@ -52,7 +58,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
         try {
             await invoke('clear_login_data');
-        } catch (error) {
+        } catch {
+            // 清除本地登录数据失败不影响退出登录
         }
     },
     loadLoginData: async () => {
@@ -71,7 +78,6 @@ export const useAppStore = create<AppState>((set, get) => ({
                 } else {
                     await invoke('clear_login_data');
                 }
-            } else {
             }
         } catch (error) {
             console.error('加载登录数据失败:', error);
@@ -90,6 +96,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             try {
                 await invoke('save_login_data', { loginData });
             } catch (error) {
+                console.error('保存登录数据失败:', error);
             }
         }
     }

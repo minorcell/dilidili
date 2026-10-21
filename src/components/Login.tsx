@@ -1,8 +1,19 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { QRCodeSVG } from 'qrcode.react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  QrCode,
+  RefreshCw,
+  ScanLine,
+  X,
+  XCircle,
+} from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { QrCodeData, LoginSuccessData, LoginStatus, UserProfile } from '../types/bilibili';
+import Button from './ui/Button';
 import { cn } from '../lib/utils';
 
 interface LoginProps {
@@ -16,21 +27,24 @@ const isTauriAvailable = () => {
 
 export default function Login({ onClose }: LoginProps) {
   const [qrData, setQrData] = useState<QrCodeData | null>(null);
-  const [loginStatus, setLoginStatus] = useState<'idle' | 'loading' | 'polling' | 'success' | 'error'>('idle');
+  const [loginStatus, setLoginStatus] = useState<
+    'idle' | 'loading' | 'polling' | 'success' | 'error'
+  >('idle');
   const [statusMessage, setStatusMessage] = useState('');
   const [pollInterval, setPollInterval] = useState<number | null>(null);
-  
+
   const { setLoginStatus: setGlobalLoginStatus } = useAppStore();
 
   // 检查 Tauri 环境
   useEffect(() => {
     if (!isTauriAvailable()) {
       setLoginStatus('error');
-      setStatusMessage('请在 Tauri 应用中使用登录功能');
+      setStatusMessage('请在 Tauri 桌面应用中使用登录功能');
     } else {
-      // 自动获取二维码
+      // 自动获取二维码（仅挂载时执行一次）
       getQrCode();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 清理定时器
@@ -41,6 +55,18 @@ export default function Login({ onClose }: LoginProps) {
       }
     };
   }, [pollInterval]);
+
+  // 支持 Esc 关闭
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose?.();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   // 获取二维码
   const getQrCode = async () => {
@@ -53,18 +79,18 @@ export default function Login({ onClose }: LoginProps) {
     try {
       setLoginStatus('loading');
       setStatusMessage('正在获取登录二维码...');
-      
+
       const qrCodeData: QrCodeData = await invoke('get_login_qr_code');
-      
+
       setQrData(qrCodeData);
       setLoginStatus('polling');
-      setStatusMessage('请使用哔哩哔哩App扫码登录');
-      
+      setStatusMessage('请使用哔哩哔哩 App 扫码登录');
+
       // 开始轮询登录状态
       startPolling(qrCodeData.qrcode_key);
-    } catch (error) {
+    } catch (qrError) {
       setLoginStatus('error');
-      setStatusMessage(`获取二维码失败：${error}`);
+      setStatusMessage(`获取二维码失败：${qrError}`);
     }
   };
 
@@ -74,32 +100,33 @@ export default function Login({ onClose }: LoginProps) {
       try {
         const result: LoginSuccessData = await invoke('poll_login_status', { qrcodeKey });
         const code = result.poll_data.code;
-        
+
         switch (code) {
           case LoginStatus.PENDING:
             setStatusMessage('等待扫码中...');
             break;
           case LoginStatus.SCANNED:
-            setStatusMessage('扫码成功！请在手机上确认登录');
+            setStatusMessage('扫码成功，请在手机上确认登录');
             break;
           case LoginStatus.SUCCESS:
             setStatusMessage('登录成功！正在获取用户信息...');
             setLoginStatus('success');
             clearInterval(interval);
-            
+
             // 获取用户信息
             try {
-              const userProfile = await invoke<UserProfile>('get_user_info', { cookies: result.cookies });
+              const userProfile = await invoke<UserProfile>('get_user_info', {
+                cookies: result.cookies,
+              });
               setGlobalLoginStatus(true, userProfile, result.cookies);
               setStatusMessage('登录成功！正在跳转...');
-            } catch (error) {
-              console.error('获取用户信息失败:', error);
+            } catch {
               // 即使获取用户信息失败，也使用默认信息登录
               const defaultProfile = { name: '用户', avatar: '', mid: 0, vip_type: 0 };
               setGlobalLoginStatus(true, defaultProfile, result.cookies);
               setStatusMessage('登录成功！正在跳转...');
             }
-            
+
             setTimeout(() => {
               onClose?.();
             }, 1500);
@@ -110,10 +137,10 @@ export default function Login({ onClose }: LoginProps) {
             clearInterval(interval);
             break;
           default:
-            setStatusMessage(`状态: ${result.poll_data.message}`);
+            setStatusMessage(`状态：${result.poll_data.message}`);
             break;
         }
-      } catch (error) {
+      } catch {
         setStatusMessage('网络连接错误，请检查网络');
         setLoginStatus('error');
         clearInterval(interval);
@@ -135,183 +162,152 @@ export default function Login({ onClose }: LoginProps) {
     getQrCode();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex">
-      {/* 左侧装饰区域 */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-pink-500 via-purple-500 to-blue-500 relative overflow-hidden">
-        {/* 装饰性几何图形 */}
-        <div className="absolute inset-0">
-          <div className="absolute top-20 left-20 w-32 h-32 bg-white/10 rounded-full blur-xl"></div>
-          <div className="absolute top-1/3 right-20 w-24 h-24 bg-white/15 rounded-2xl rotate-45 blur-lg"></div>
-          <div className="absolute bottom-32 left-1/3 w-40 h-40 bg-white/5 rounded-full blur-2xl"></div>
-          <div className="absolute bottom-20 right-1/4 w-20 h-20 bg-white/20 rounded-xl rotate-12 blur-md"></div>
-        </div>
-        
-        {/* 主要内容 */}
-        <div className="relative z-10 flex flex-col justify-center items-center text-white p-12">
-          <div className="text-center mb-8">
-            <div className="w-24 h-24 bg-white/20 rounded-3xl flex items-center justify-center mx-auto mb-6 backdrop-blur-sm">
-              <span className="text-5xl">🎬</span>
-            </div>
-            <h1 className="text-5xl font-bold mb-4">DILIDILI</h1>
-            <p className="text-xl text-white/90 mb-8">哔哩哔哩桌面下载器</p>
-          </div>
-          
-          {/* 特性介绍 */}
-          <div className="space-y-4 max-w-sm">
-            <div className="flex items-center space-x-3 text-white/90">
-              <span>高质量视频下载</span>
-            </div>
-            <div className="flex items-center space-x-3 text-white/90">
-              <span>极速下载体验</span>
-            </div>
-            <div className="flex items-center space-x-3 text-white/90">
-              <span>安全隐私保护</span>
-            </div>
-          </div>
-        </div>
-      </div>
+  const statusIcon = () => {
+    switch (loginStatus) {
+      case 'success':
+        return <CheckCircle2 size={14} className="text-success-fg" aria-hidden="true" />;
+      case 'error':
+        return <XCircle size={14} className="text-danger-fg" aria-hidden="true" />;
+      case 'loading':
+        return <Loader2 size={14} className="animate-spin text-accent-fg" aria-hidden="true" />;
+      case 'polling':
+        return <ScanLine size={14} className="text-accent-fg" aria-hidden="true" />;
+      default:
+        return <QrCode size={14} className="text-muted" aria-hidden="true" />;
+    }
+  };
 
-      {/* 右侧登录区域 */}
-      <div className="w-full lg:w-1/2 bg-white dark:bg-gray-900 flex flex-col">
-        {/* 头部 */}
-        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center space-x-3">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">登录账户</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">使用哔哩哔哩账号登录</p>
-            </div>
-          </div>
+  const statusTone =
+    loginStatus === 'success'
+      ? 'border-success/40 bg-success-subtle text-success-fg'
+      : loginStatus === 'error'
+        ? 'border-danger/40 bg-danger-subtle text-danger-fg'
+        : loginStatus === 'polling' || loginStatus === 'loading'
+          ? 'border-accent/40 bg-accent-subtle text-accent-fg'
+          : 'border-line bg-subtle text-muted';
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-overlay-in"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose?.();
+        }
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="login-dialog-title"
+        className="w-full max-w-sm animate-dialog-in overflow-hidden rounded-lg border border-line bg-canvas shadow-xl"
+      >
+        <div className="flex items-center justify-between border-b border-line bg-subtle px-4 py-3">
+          <h2 id="login-dialog-title" className="text-sm font-semibold text-fg">
+            登录账户
+          </h2>
           <button
+            type="button"
             onClick={onClose}
-            className="w-10 h-10 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 rounded-full flex items-center justify-center transition-colors"
+            aria-label="关闭登录窗口"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-neutral-subtle hover:text-fg"
           >
-            <span className="text-gray-500 dark:text-gray-400 text-lg">✕</span>
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
 
-        {/* 主要内容区域 */}
-        <div className="flex-1 flex flex-col justify-center p-8 lg:p-12">
-          
-          {/* Tauri 环境检查 */}
-          {!isTauriAvailable() && (
-            <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-2xl">
-              <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-white text-sm">!</span>
+        <div className="space-y-4 p-4">
+          <p className="text-sm text-muted">使用哔哩哔哩手机 App 扫描二维码完成登录。</p>
+
+          {/* 二维码区域 */}
+          <div className="flex justify-center">
+            <div className="flex h-[212px] w-[212px] items-center justify-center rounded-md border border-line bg-canvas p-3">
+              {qrData ? (
+                <QRCodeSVG
+                  value={qrData.url}
+                  size={184}
+                  level="M"
+                  includeMargin={false}
+                  className="rounded-sm"
+                />
+              ) : loginStatus === 'error' ? (
+                <div className="flex flex-col items-center gap-2 text-center">
+                  <XCircle size={32} className="text-danger-fg" aria-hidden="true" />
+                  <p className="text-xs text-muted">二维码获取失败</p>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-yellow-800 dark:text-yellow-200 mb-1">
-                    开发环境提示
-                  </h3>
-                  <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                    当前在浏览器环境中运行，登录功能需要桌面应用支持。
-                    <br />
-                    请运行 <code className="bg-yellow-200 dark:bg-yellow-800 px-1 rounded font-mono">pnpm tauri dev</code> 启动桌面应用。
-                  </p>
+              ) : (
+                <div className="flex flex-col items-center gap-2 text-center">
+                  <Loader2 size={28} className="animate-spin text-accent-fg" aria-hidden="true" />
+                  <p className="text-xs text-muted">正在生成二维码...</p>
                 </div>
-              </div>
+              )}
+            </div>
+          </div>
+
+          {/* 状态信息 */}
+          <div
+            className={cn(
+              'flex items-start gap-2 rounded-md border px-3 py-2 text-xs leading-relaxed',
+              statusTone,
+            )}
+            role="status"
+            aria-live="polite"
+          >
+            <span className="mt-0.5 shrink-0">{statusIcon()}</span>
+            <span>{statusMessage || '准备获取登录二维码'}</span>
+          </div>
+
+          {/* 操作按钮 */}
+          {loginStatus === 'error' && (
+            <Button
+              variant="primary"
+              size="lg"
+              className="w-full"
+              onClick={refreshQrCode}
+              disabled={!isTauriAvailable()}
+            >
+              <RefreshCw size={16} aria-hidden="true" />
+              重新获取二维码
+            </Button>
+          )}
+
+          {loginStatus === 'polling' && (
+            <Button
+              variant="default"
+              size="lg"
+              className="w-full"
+              onClick={refreshQrCode}
+              disabled={!isTauriAvailable()}
+            >
+              <RefreshCw size={16} aria-hidden="true" />
+              刷新二维码
+            </Button>
+          )}
+
+          {loginStatus === 'success' && (
+            <div className="flex items-center justify-center gap-2 rounded-md border border-success/40 bg-success-subtle px-3 py-2 text-sm font-medium text-success-fg">
+              <CheckCircle2 size={16} aria-hidden="true" />
+              登录成功，正在初始化...
             </div>
           )}
 
-          <div className="max-w-sm mx-auto w-full space-y-8">
-            
-            {/* 二维码区域 */}
-            <div className="text-center">
-              <div className="relative inline-block p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-3xl shadow-inner">
-                {qrData ? (
-                  <div className="relative">
-                    <QRCodeSVG
-                      value={qrData.url}
-                      size={200}
-                      level="M"
-                      includeMargin={true}
-                      className="rounded-2xl shadow-sm"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-[200px] h-[200px] flex items-center justify-center">
-                    {loginStatus === 'loading' ? (
-                      <div className="text-center space-y-4">
-                        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                        <p className="text-gray-500 dark:text-gray-400 text-sm">正在生成二维码...</p>
-                      </div>
-                    ) : loginStatus === 'error' ? (
-                      <div className="text-center space-y-4">
-                        <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto">
-                          <span className="text-2xl">❌</span>
-                        </div>
-                        <p className="text-red-600 dark:text-red-400 text-sm">二维码获取失败</p>
-                      </div>
-                    ) : (
-                      <div className="text-center space-y-4">
-                        <p className="text-gray-500 dark:text-gray-400 text-sm">准备获取二维码</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+          {!isTauriAvailable() && (
+            <div className="flex items-start gap-2 rounded-md border border-attention/40 bg-attention-subtle px-3 py-2 text-xs text-attention-fg">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+              <span>
+                当前在浏览器环境中运行，登录需要桌面应用支持。请运行{' '}
+                <code className="rounded bg-attention/10 px-1 py-0.5 font-mono">
+                  pnpm tauri dev
+                </code>{' '}
+                启动桌面应用。
+              </span>
             </div>
+          )}
 
-            {/* 状态信息 */}
-            <div className="text-center space-y-4">
-              <div className={cn(
-                "inline-flex items-center space-x-2 px-4 py-3 rounded-2xl text-sm font-medium transition-all",
-                loginStatus === 'success' && "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-                loginStatus === 'error' && "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-                loginStatus === 'polling' && "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-                loginStatus === 'loading' && "bg-gray-50 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-                loginStatus === 'idle' && "bg-gray-50 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
-              )}>
-                <span>
-                  {statusMessage || 
-                    (loginStatus === 'idle' ? '准备获取登录二维码' : 
-                     loginStatus === 'loading' ? '正在生成二维码...' : 
-                     statusMessage)}
-                </span>
-              </div>
-
-              {/* 操作按钮 */}
-              <div className="space-y-3">
-                {loginStatus === 'error' && (
-                  <button
-                    onClick={refreshQrCode}
-                    disabled={!isTauriAvailable()}
-                    className="w-full px-6 py-3 bg-gradient-to-r from-pink-500 to-blue-500 text-white rounded-xl hover:from-pink-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed font-semibold shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02] flex items-center justify-center space-x-2"
-                  >
-                    <span>重新获取二维码</span>
-                  </button>
-                )}
-                
-                {loginStatus === 'polling' && (
-                  <button
-                    onClick={refreshQrCode}
-                    className="w-full px-6 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl font-semibold transition-all flex items-center justify-center space-x-2"
-                  >
-                    <span>刷新二维码</span>
-                  </button>
-                )}
-                
-                {loginStatus === 'success' && (
-                  <div className="flex items-center justify-center space-x-2 text-green-600 dark:text-green-400">
-                    <span className="font-semibold">登录成功！正在初始化...</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* 底部说明 */}
-            <div className="text-center space-y-2">
-              <div className="flex items-center justify-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
-                <span>使用哔哩哔哩手机App扫描上方二维码</span>
-              </div>
-              <div className="flex items-center justify-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
-                <span>登录信息将安全存储在本地</span>
-              </div>
-            </div>
-          </div>
+          <p className="text-center text-xs text-subtle-fg">
+            登录信息仅保存在本机，不会上传到任何服务器。
+          </p>
         </div>
       </div>
     </div>
   );
-} 
+}

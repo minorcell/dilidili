@@ -1,11 +1,83 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  ChevronDown,
+  Download,
+  FlaskConical,
+  FolderOpen,
+  LogIn,
+  LogOut,
+  MonitorPlay,
+  Moon,
+  QrCode,
+  ShieldCheck,
+  Sparkles,
+  Sun,
+  UserRound,
+  Zap,
+} from 'lucide-react';
 import './App.css';
 import Downloader from './components/Downloader';
 import Login from './components/Login';
 import TestPage from './components/TestPage';
 import UserProfile from './components/UserProfile';
+import Avatar from './components/ui/Avatar';
+import Button from './components/ui/Button';
+import { Card, CardBody, CardHeader, CardTitle } from './components/ui/Card';
+import Logo from './components/ui/Logo';
 import { MessageProvider } from './components/ui/MessageContext';
+import { useTheme } from './lib/theme';
+import { cn } from './lib/utils';
 import { useAppStore } from './store/appStore';
+
+const FEATURES: { icon: LucideIcon; title: string; description: string }[] = [
+  {
+    icon: MonitorPlay,
+    title: '最高 4K 清晰度',
+    description: '登录后可获取大会员专属的超清视频流。',
+  },
+  {
+    icon: Zap,
+    title: '音视频自动合并',
+    description: '内置 FFmpeg，下载完成后自动合并为完整 MP4。',
+  },
+  {
+    icon: FolderOpen,
+    title: '导出、转码与提取音频',
+    description: '一键导出到指定文件夹，或转换为 AVI/MKV、提取 MP3。',
+  },
+  {
+    icon: ShieldCheck,
+    title: '数据只留在本机',
+    description: 'Cookie 与下载记录均保存在本地，不经过任何第三方服务器。',
+  },
+];
+
+interface NavTabProps {
+  active: boolean;
+  icon: LucideIcon;
+  onClick: () => void;
+  children: React.ReactNode;
+}
+
+function NavTab({ active, icon: Icon, onClick, children }: NavTabProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      className={cn(
+        '-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm transition-colors',
+        active
+          ? 'border-[#fd8c73] font-semibold text-fg'
+          : 'border-transparent text-muted hover:border-line hover:text-fg',
+      )}
+    >
+      <Icon size={16} aria-hidden="true" />
+      {children}
+    </button>
+  );
+}
 
 function App() {
   const { isLoggedIn, userProfile, logout, loadLoginData } = useAppStore();
@@ -13,240 +85,251 @@ function App() {
   const [showTestPage, setShowTestPage] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const { isDark, toggleTheme } = useTheme();
 
   // 应用启动时自动加载登录状态
   useEffect(() => {
     loadLoginData();
   }, [loadLoginData]);
 
-  const handleLogin = () => {
-    setShowLogin(true);
-  };
+  // 点击菜单外部或按下 Esc 关闭用户菜单
+  useEffect(() => {
+    if (!showUserMenu) return undefined;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowUserMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showUserMenu]);
 
   return (
     <MessageProvider>
-      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      {/* Header */}
-      <header className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg shadow-lg border-b border-gray-200/50 dark:border-gray-700/50 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex justify-between items-center">
-            {/* Logo区域 */}
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-blue-500 rounded-2xl flex items-center justify-center shadow-lg transform hover:scale-105 transition-transform">
-                <span className="text-white font-bold text-xl">🎬</span>
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-pink-500 to-blue-500 bg-clip-text text-transparent">
-                  DILIDILI
-                </h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  哔哩哔哩视频下载器
-                </p>
-              </div>
+      <div className="flex min-h-screen flex-col bg-canvas text-fg">
+        <header className="sticky top-0 z-40 border-b border-header-line bg-header text-header-fg">
+          <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4">
+            <Logo onDark className="h-9 w-9" iconSize={20} />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold leading-tight">DILIDILI</p>
+              <p className="truncate text-xs leading-tight text-white/60">哔哩哔哩视频下载器</p>
             </div>
-            
-            {/* 右侧用户区域 */}
-            <div className="flex items-center space-x-4">
-              {/* 测试模式按钮 */}
+
+            <div className="ml-auto flex items-center gap-2">
               <button
-                onClick={() => setShowTestPage(!showTestPage)}
-                className={`px-4 py-2 text-sm rounded-xl font-medium transition-all ${
-                  showTestPage 
-                    ? 'bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-lg hover:shadow-xl' 
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                }`}
+                type="button"
+                onClick={toggleTheme}
+                title={isDark ? '切换到浅色模式' : '切换到深色模式'}
+                aria-label={isDark ? '切换到浅色模式' : '切换到深色模式'}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/15 text-white/75 transition-colors hover:bg-white/10 hover:text-white"
               >
-                {showTestPage ? '退出测试' : '测试模式'}
+                {isDark ? (
+                  <Sun size={16} aria-hidden="true" />
+                ) : (
+                  <Moon size={16} aria-hidden="true" />
+                )}
               </button>
-              
+
               {isLoggedIn ? (
-                <div className="relative">
-                  {/* 用户信息显示 */}
+                <div className="relative" ref={userMenuRef}>
                   <button
-                    onClick={() => setShowUserMenu(!showUserMenu)}
-                    className="flex items-center space-x-3 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
+                    type="button"
+                    onClick={() => setShowUserMenu((open) => !open)}
+                    aria-haspopup="menu"
+                    aria-expanded={showUserMenu}
+                    className="flex items-center gap-2 rounded-md px-1.5 py-1 text-header-fg transition-colors hover:bg-white/10"
                   >
-                    <div className="relative">
-                      {userProfile?.avatar ? (
-                        <img
-                          src={userProfile.avatar}
-                          alt="头像"
-                          className="w-10 h-10 rounded-full ring-2 ring-pink-500/30"
-                          onError={(e) => {
-                            e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9InVybCgjZ3JhZGllbnQwX2xpbmVhcl8xXzEpIi8+CjxwYXRoIGQ9Ik0yMCAxMkM4IDE2IDggMjQgMjAgMjhDMzIgMjQgMzIgMTYgMjAgMTJaIiBmaWxsPSJ3aGl0ZSIgZmlsbC1vcGFjaXR5PSIwLjgiLz4KPGRlZnM+CjxsaW5lYXJHcmFkaWVudCBpZD0iZ3JhZGllbnQwX2xpbmVhcl8xXzEiIHgxPSIwIiB5MT0iMCIgeDI9IjQwIiB5Mj0iNDAiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0iI0Y0NzJCNiIvPgo8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMzQjgyRjYiLz4KPC9saW5lYXJHcmFkaWVudD4KPC9kZWZzPgo8L3N2Zz4K';
-                          }}
-                        />
-                      ) : (
-                        <div className="w-10 h-10 bg-gradient-to-br from-pink-400 to-blue-400 rounded-full flex items-center justify-center">
-                          <span className="text-white font-bold">👤</span>
-                        </div>
+                    <Avatar
+                      src={userProfile?.avatar}
+                      name={userProfile?.name}
+                      className="h-6 w-6 border-white/20 bg-white/10 text-white/70"
+                      iconSize={14}
+                    />
+                    <span className="hidden max-w-32 truncate text-sm sm:block">
+                      {userProfile?.name || '用户'}
+                    </span>
+                    <ChevronDown
+                      size={14}
+                      aria-hidden="true"
+                      className={cn(
+                        'text-white/60 transition-transform',
+                        showUserMenu && 'rotate-180',
                       )}
-                    </div>
-                    <div className="text-left">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                        {userProfile?.name || '用户'}
-                      </p>
-                    </div>
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
+                    />
                   </button>
 
-                  {/* 用户菜单下拉 */}
                   {showUserMenu && (
-                    <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 py-2 z-50">
-                      {/* 用户信息卡片 */}
-                      <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                        <div className="flex items-center space-x-3">
-                          {userProfile?.avatar ? (
-                            <img
-                              src={userProfile.avatar}
-                              alt="头像"
-                              className="w-12 h-12 rounded-full"
-                              onError={(e) => {
-                                e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9InVybCgjZ3JhZGllbnQwX2xpbmVhcl8xXzEpIi8+CjxwYXRoIGQ9Ik0yMCAxMkM4IDE2IDggMjQgMjAgMjhDMzIgMjQgMzIgMTYgMjAgMTJaIiBmaWxsPSJ3aGl0ZSIgZmlsbC1vcGFjaXR5PSIwLjgiLz4KPGRlZnM+CjxsaW5lYXJHcmFkaWVudCBpZD0iZ3JhZGllbnQwX2xpbmVhcl8xXzEiIHgxPSIwIiB5MT0iMCIgeDI9IjQwIiB5Mj0iNDAiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0iI0Y0NzJCNiIvPgo8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMzQjgyRjYiLz4KPC9saW5lYXJHcmFkaWVudD4KPC9kZWZzPgo8L3N2Zz4K';
-                              }}
-                            />
-                          ) : (
-                            <div className="w-12 h-12 bg-gradient-to-br from-pink-400 to-blue-400 rounded-full flex items-center justify-center">
-                              <span className="text-white font-bold text-lg">👤</span>
-                            </div>
-                          )}
-                          <div>
-                            <p className="font-semibold text-gray-900 dark:text-white">
-                              {userProfile?.name || '用户'}
-                            </p>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                              UID: {userProfile?.mid || 'Unknown'}
-                            </p>
-                          </div>
+                    <div
+                      role="menu"
+                      className="absolute right-0 z-50 mt-2 w-60 animate-menu-in overflow-hidden rounded-md border border-line bg-canvas text-fg shadow-lg"
+                    >
+                      <div className="flex items-center gap-3 border-b border-line bg-subtle px-3 py-3">
+                        <Avatar
+                          src={userProfile?.avatar}
+                          name={userProfile?.name}
+                          className="h-8 w-8"
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">
+                            {userProfile?.name || '用户'}
+                          </p>
+                          <p className="truncate font-mono text-xs text-muted">
+                            UID {userProfile?.mid ?? '未知'}
+                          </p>
                         </div>
                       </div>
 
-                      {/* 菜单项 */}
-                      <div className="py-2">
+                      <div className="py-1">
                         <button
+                          type="button"
+                          role="menuitem"
                           onClick={() => {
                             setShowUserMenu(false);
                             setShowUserProfile(true);
                           }}
-                          className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-subtle"
                         >
-                          <span>个人信息</span>
+                          <UserRound size={16} className="text-muted" aria-hidden="true" />
+                          个人信息
                         </button>
-                        <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+                      </div>
+
+                      <div className="border-t border-line py-1">
                         <button
+                          type="button"
+                          role="menuitem"
                           onClick={() => {
                             setShowUserMenu(false);
                             logout();
                           }}
-                          className="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-2"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-danger-fg transition-colors hover:bg-danger-subtle"
                         >
-                          <span>退出登录</span>
+                          <LogOut size={16} aria-hidden="true" />
+                          退出登录
                         </button>
                       </div>
                     </div>
                   )}
                 </div>
               ) : (
-                <button
-                  onClick={handleLogin}
-                  className="px-6 py-3 bg-gradient-to-r from-pink-500 to-blue-500 text-white rounded-xl hover:from-pink-600 hover:to-blue-600 text-sm font-semibold shadow-lg hover:shadow-xl transition-all"
+                <Button
+                  variant="ghost"
+                  className="border-white/25 text-header-fg hover:border-white/40 hover:bg-white/10 hover:text-white"
+                  onClick={() => setShowLogin(true)}
                 >
-                  立即登录
-                </button>
+                  <LogIn size={16} aria-hidden="true" />
+                  登录
+                </Button>
               )}
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Main Content */}
-      <main className="flex-1">
-        {showTestPage ? (
-          <TestPage />
-        ) : isLoggedIn ? (
-          <Downloader />
-        ) : (
-          /* 欢迎页面 */
-          <div className="min-h-screen flex items-center justify-center px-4">
-            <div className="max-w-2xl mx-auto text-center">
-              {/* 主要图标 */}
-              <div className="mb-8">
-                <div className="w-32 h-32 bg-gradient-to-br from-pink-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl">
-                  <span className="text-6xl">🎬</span>
-                </div>
-                <div className="w-24 h-2 bg-gradient-to-r from-pink-500 to-blue-500 rounded-full mx-auto"></div>
-              </div>
-
-              {/* 标题和描述 */}
-              <h2 className="text-5xl font-bold bg-gradient-to-r from-pink-500 to-blue-500 bg-clip-text text-transparent mb-4">
-                DILIDILI 下载器
-              </h2>
-              <p className="text-xl text-gray-600 dark:text-gray-400 mb-2">
-                高质量下载你喜欢的哔哩哔哩视频
-              </p>
-              <p className="text-gray-500 dark:text-gray-500 mb-8">
-                支持多种清晰度选择，快速稳定的下载体验
-              </p>
-
-              {/* 特性展示 */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-                <div className="p-6 bg-white/50 dark:bg-gray-800/50 rounded-2xl backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50">
-                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center mx-auto mb-4">
-                    <span className="text-2xl">🎯</span>
-                  </div>
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2">高清下载</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">支持4K、1080P等多种清晰度</p>
-                </div>
-                <div className="p-6 bg-white/50 dark:bg-gray-800/50 rounded-2xl backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50">
-                  <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-teal-500 rounded-xl flex items-center justify-center mx-auto mb-4">
-                    <span className="text-2xl">⚡</span>
-                  </div>
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2">快速稳定</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">高速下载，断点续传</p>
-                </div>
-                <div className="p-6 bg-white/50 dark:bg-gray-800/50 rounded-2xl backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50">
-                  <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-red-500 rounded-xl flex items-center justify-center mx-auto mb-4">
-                    <span className="text-2xl">🛡️</span>
-                  </div>
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2">安全可靠</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">本地运行，隐私保护</p>
-                </div>
-              </div>
-
-              {/* 登录按钮 */}
-              <button
-                onClick={handleLogin}
-                className="px-12 py-4 bg-gradient-to-r from-pink-500 to-blue-500 text-white rounded-2xl hover:from-pink-600 hover:to-blue-600 font-bold text-lg shadow-2xl hover:shadow-3xl transition-all transform hover:scale-105"
+        {isLoggedIn && (
+          <nav className="border-b border-line bg-canvas" aria-label="主导航">
+            <div className="mx-auto flex w-full max-w-6xl items-center gap-1 px-4">
+              <NavTab active={!showTestPage} icon={Download} onClick={() => setShowTestPage(false)}>
+                下载
+              </NavTab>
+              <NavTab
+                active={showTestPage}
+                icon={FlaskConical}
+                onClick={() => setShowTestPage(true)}
               >
-                立即登录开始使用
-              </button>
-              
-              <p className="text-sm text-gray-500 dark:text-gray-500 mt-4">
-                需要哔哩哔哩账号授权以获取视频下载权限
-              </p>
+                测试
+              </NavTab>
             </div>
-          </div>
+          </nav>
         )}
-      </main>
 
-      {/* Login Modal */}
-      {showLogin && (
-        <Login onClose={() => setShowLogin(false)} />
-      )}
+        <main className="flex-1">
+          {showTestPage ? (
+            <TestPage />
+          ) : isLoggedIn ? (
+            <Downloader />
+          ) : (
+            <div className="mx-auto grid w-full max-w-5xl gap-10 px-4 py-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:gap-16 lg:py-20">
+              <section>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-subtle px-2.5 py-1 text-xs text-muted">
+                  <Sparkles size={12} className="text-accent-fg" aria-hidden="true" />
+                  本地运行 · 无需上传
+                </span>
+                <h1 className="mt-4 text-4xl/[1.2] font-semibold tracking-tight text-fg sm:text-5xl/[1.15]">
+                  下载你喜欢的
+                  <br className="hidden sm:block" />
+                  哔哩哔哩视频
+                </h1>
+                <p className="mt-4 max-w-md text-base text-muted">
+                  支持最高 4K 清晰度，自动合并音视频流，并可直接导出、转码或提取音频。
+                </p>
 
-      {/* User Profile Modal */}
-      {showUserProfile && (
-        <UserProfile onClose={() => setShowUserProfile(false)} />
-      )}
-      {/* 点击外部关闭用户菜单 */}
-      {showUserMenu && (
-        <div 
-          className="fixed inset-0 z-40" 
-          onClick={() => setShowUserMenu(false)}
-        ></div>
-      )}
+                <ul className="mt-8 space-y-4">
+                  {FEATURES.map(({ icon: Icon, title, description }) => (
+                    <li key={title} className="flex gap-3">
+                      <Icon
+                        size={16}
+                        className="mt-0.5 shrink-0 text-accent-fg"
+                        aria-hidden="true"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-fg">{title}</p>
+                        <p className="text-sm text-muted">{description}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    <QrCode size={16} aria-hidden="true" />
+                    登录账户
+                  </CardTitle>
+                </CardHeader>
+                <CardBody className="space-y-4">
+                  <p className="text-sm text-muted">
+                    使用哔哩哔哩手机 App 扫码登录，以获取高清与大会员清晰度的下载权限。
+                  </p>
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    className="w-full"
+                    onClick={() => setShowLogin(true)}
+                  >
+                    <LogIn size={16} aria-hidden="true" />
+                    使用二维码登录
+                  </Button>
+                  <p className="text-center text-xs text-subtle-fg">登录信息仅保存在本机。</p>
+                </CardBody>
+              </Card>
+            </div>
+          )}
+        </main>
+
+        <footer className="border-t border-line py-6">
+          <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-4 text-xs text-subtle-fg">
+            <span>DILIDILI · 哔哩哔哩视频下载器</span>
+            <span>MIT License</span>
+          </div>
+        </footer>
+
+        {showLogin && <Login onClose={() => setShowLogin(false)} />}
+
+        {showUserProfile && <UserProfile onClose={() => setShowUserProfile(false)} />}
       </div>
     </MessageProvider>
   );

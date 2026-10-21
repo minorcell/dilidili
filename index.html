@@ -1,11 +1,26 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <link rel="icon" type="image/png" href="/icon.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DILIDILI-B站视频下载器</title>
+  <meta name="color-scheme" content="light dark" />
+  <title>DILIDILI · 哔哩哔哩视频下载器</title>
+  <script>
+    // 在 React 挂载前恢复主题，避免深色模式下的白屏闪烁
+    (function () {
+      try {
+        var preference = localStorage.getItem('dilidili-theme') || 'system';
+        var dark =
+          preference === 'dark' ||
+          (preference === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.toggle('dark', dark);
+      } catch (error) {
+        /* 本地存储不可用时忽略 */
+      }
+    })();
+  </script>
 </head>
 
 <body>

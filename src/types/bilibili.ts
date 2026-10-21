@@ -89,6 +89,8 @@ export interface DownloadItem {
     title: string;
     progress: number;
     status: 'pending' | 'downloading' | 'completed' | 'failed';
+    // 下载完成后的本地文件路径
+    filePath?: string;
     // 可选的额外下载信息
     videoData?: VideoData;
     selectedQuality?: {
