@@ -1,62 +1,262 @@
 @import "tailwindcss";
 
-/* 自定义滚动条样式 */
+/* 使用 class 控制深色模式（由 src/lib/theme.ts 写入 <html class="dark">） */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ------------------------------------------------------------------ */
+/* 设计令牌：参考 GitHub Primer 的色板与排版                            */
+/* ------------------------------------------------------------------ */
+
+:root {
+  color-scheme: light;
+
+  --canvas-default: #ffffff;
+  --canvas-subtle: #f6f8fa;
+  --canvas-inset: #f6f8fa;
+
+  --border-default: #d0d7de;
+  --border-muted: #d8dee4;
+
+  --fg-default: #1f2328;
+  --fg-muted: #59636e;
+  --fg-subtle: #6e7781;
+
+  --accent-fg: #0969da;
+  --accent-emphasis: #0969da;
+  --accent-subtle: #ddf4ff;
+
+  --success-fg: #1a7f37;
+  --success-emphasis: #1f883d;
+  --success-subtle: #dafbe1;
+
+  --attention-fg: #9a6700;
+  --attention-subtle: #fff8c5;
+
+  --danger-fg: #d1242f;
+  --danger-emphasis: #cf222e;
+  --danger-subtle: #ffebe9;
+
+  --done-fg: #8250df;
+  --done-subtle: #fbefff;
+
+  --neutral-subtle: #eff2f5;
+
+  --header-bg: #24292f;
+  --header-fg: #ffffff;
+  --header-border: #30363d;
+
+  --scrollbar-thumb: #d0d7de;
+  --scrollbar-thumb-hover: #afb8c1;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --canvas-default: #0d1117;
+  --canvas-subtle: #161b22;
+  --canvas-inset: #010409;
+
+  --border-default: #30363d;
+  --border-muted: #21262d;
+
+  --fg-default: #e6edf3;
+  --fg-muted: #8b949e;
+  --fg-subtle: #6e7681;
+
+  --accent-fg: #4493f8;
+  --accent-emphasis: #1f6feb;
+  --accent-subtle: #121d2f;
+
+  --success-fg: #3fb950;
+  --success-emphasis: #238636;
+  --success-subtle: #12261e;
+
+  --attention-fg: #d29922;
+  --attention-subtle: #272115;
+
+  --danger-fg: #f85149;
+  --danger-emphasis: #da3633;
+  --danger-subtle: #25171c;
+
+  --done-fg: #a371f7;
+  --done-subtle: #1f1633;
+
+  --neutral-subtle: #21262d;
+
+  --header-bg: #161b22;
+  --header-fg: #e6edf3;
+  --header-border: #30363d;
+
+  --scrollbar-thumb: #484f58;
+  --scrollbar-thumb-hover: #6e7681;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas-default);
+  --color-subtle: var(--canvas-subtle);
+  --color-inset: var(--canvas-inset);
+
+  --color-line: var(--border-default);
+  --color-line-muted: var(--border-muted);
+
+  --color-fg: var(--fg-default);
+  --color-muted: var(--fg-muted);
+  --color-subtle-fg: var(--fg-subtle);
+
+  --color-accent: var(--accent-emphasis);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-subtle: var(--accent-subtle);
+
+  --color-success: var(--success-emphasis);
+  --color-success-fg: var(--success-fg);
+  --color-success-subtle: var(--success-subtle);
+
+  --color-attention: var(--attention-fg);
+  --color-attention-fg: var(--attention-fg);
+  --color-attention-subtle: var(--attention-subtle);
+
+  --color-danger: var(--danger-emphasis);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-subtle: var(--danger-subtle);
+
+  --color-done: var(--done-fg);
+  --color-done-fg: var(--done-fg);
+  --color-done-subtle: var(--done-subtle);
+
+  --color-neutral-subtle: var(--neutral-subtle);
+
+  --color-header: var(--header-bg);
+  --color-header-fg: var(--header-fg);
+  --color-header-line: var(--header-border);
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji";
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    min-height: 100vh;
+    background-color: var(--canvas-default);
+    color: var(--fg-default);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  ::selection {
+    background-color: var(--accent-subtle);
+    color: var(--fg-default);
+  }
+
+  /* 无障碍：统一的键盘焦点样式 */
+  :focus-visible {
+    outline: 2px solid var(--accent-emphasis);
+    outline-offset: -1px;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 组件辅助样式                                                        */
+/* ------------------------------------------------------------------ */
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
 .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-    border-radius: 3px;
+  background: transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 3px;
-    transition: background 0.2s ease;
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+  background: var(--scrollbar-thumb-hover);
 }
 
-.dark .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #4b5563;
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
-.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #6b7280;
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
-/* 下拉菜单动画 */
-@keyframes slideDownAndFade {
-    from {
-        opacity: 0;
-        transform: translateY(-10px) scale(0.95);
-    }
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-@keyframes slideUpAndFade {
-    from {
-        opacity: 0;
-        transform: translateY(10px) scale(0.95);
-    }
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
 
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.animate-slideDownAndFade {
-    animation: slideDownAndFade 0.2s ease-out;
+.animate-overlay-in {
+  animation: overlay-in 0.15s ease-out;
 }
 
-.animate-slideUpAndFade {
-    animation: slideUpAndFade 0.2s ease-out;
+.animate-dialog-in {
+  animation: dialog-in 0.18s ease-out;
+}
+
+.animate-menu-in {
+  animation: menu-in 0.12s ease-out;
+}
+
+.animate-toast-in {
+  animation: toast-in 0.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-overlay-in,
+  .animate-dialog-in,
+  .animate-menu-in,
+  .animate-toast-in {
+    animation: none;
+  }
 }

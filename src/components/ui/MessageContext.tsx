@@ -1,36 +1,21 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { cn } from '../../lib/utils';
+import {
+  MessageContext,
+  useMessage,
+  type MessageContextType,
+  type MessageProps,
+  type MessageState,
+  type MessageType,
+} from './message-context';
 
-export interface MessageProps {
-  type: 'success' | 'error' | 'warning' | 'info';
-  title?: string;
-  message: string;
-  duration?: number;
-}
-
-interface MessageState extends MessageProps {
-  id: string;
-  isVisible: boolean;
-}
-
-interface MessageContextType {
-  messages: MessageState[];
-  showMessage: (props: MessageProps) => string;
-  hideMessage: (id: string) => void;
-  clearMessages: () => void;
-  success: (msg: string, title?: string, duration?: number) => string;
-  error: (msg: string, title?: string, duration?: number) => string;
-  warning: (msg: string, title?: string, duration?: number) => string;
-  info: (msg: string, title?: string, duration?: number) => string;
-}
-
-const MessageContext = createContext<MessageContextType | undefined>(undefined);
-
-export const useMessage = () => {
-  const context = useContext(MessageContext);
-  if (!context) {
-    throw new Error('useMessage must be used within a MessageProvider');
-  }
-  return context;
+const TONES: Record<MessageType, { icon: LucideIcon; iconClassName: string }> = {
+  success: { icon: CheckCircle2, iconClassName: 'text-success-fg' },
+  error: { icon: XCircle, iconClassName: 'text-danger-fg' },
+  warning: { icon: AlertTriangle, iconClassName: 'text-attention-fg' },
+  info: { icon: Info, iconClassName: 'text-accent-fg' },
 };
 
 interface MessageProviderProps {
@@ -40,66 +25,80 @@ interface MessageProviderProps {
 export const MessageProvider: React.FC<MessageProviderProps> = ({ children }) => {
   const [messages, setMessages] = useState<MessageState[]>([]);
 
-  const showMessage = useCallback((props: MessageProps): string => {
-    const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-    const newMessage: MessageState = {
-      ...props,
-      id,
-      isVisible: true,
-      duration: props.duration || 4000
-    };
-
-    setMessages(prev => [...prev, newMessage]);
-
-    // 自动关闭
-    if (newMessage.duration && newMessage.duration > 0) {
-      setTimeout(() => {
-        hideMessage(id);
-      }, newMessage.duration);
-    }
-
-    return id;
-  }, []);
-
   const hideMessage = useCallback((id: string) => {
-    setMessages(prev => 
-      prev.map(msg => 
-        msg.id === id ? { ...msg, isVisible: false } : msg
-      )
-    );
-    
+    setMessages((prev) => prev.map((msg) => (msg.id === id ? { ...msg, isVisible: false } : msg)));
+
     // 动画结束后移除
     setTimeout(() => {
-      setMessages(prev => prev.filter(msg => msg.id !== id));
-    }, 300);
+      setMessages((prev) => prev.filter((msg) => msg.id !== id));
+    }, 200);
   }, []);
+
+  const showMessage = useCallback(
+    ({ duration = 4000, ...props }: MessageProps): string => {
+      const id = `${Date.now()}${Math.random().toString(36).slice(2, 9)}`;
+      const newMessage: MessageState = {
+        ...props,
+        id,
+        isVisible: true,
+        duration,
+      };
+
+      setMessages((prev) => [...prev, newMessage]);
+
+      // 自动关闭
+      if (duration > 0) {
+        setTimeout(() => {
+          hideMessage(id);
+        }, duration);
+      }
+
+      return id;
+    },
+    [hideMessage],
+  );
 
   const clearMessages = useCallback(() => {
     setMessages([]);
   }, []);
 
-  const success = useCallback((msg: string, title?: string, duration?: number) => 
-    showMessage({ type: 'success', message: msg, title, duration }), [showMessage]);
-  
-  const error = useCallback((msg: string, title?: string, duration?: number) => 
-    showMessage({ type: 'error', message: msg, title, duration }), [showMessage]);
-  
-  const warning = useCallback((msg: string, title?: string, duration?: number) => 
-    showMessage({ type: 'warning', message: msg, title, duration }), [showMessage]);
-  
-  const info = useCallback((msg: string, title?: string, duration?: number) => 
-    showMessage({ type: 'info', message: msg, title, duration }), [showMessage]);
+  const success = useCallback(
+    (msg: string, title?: string, duration?: number) =>
+      showMessage({ type: 'success', message: msg, title, duration }),
+    [showMessage],
+  );
 
-  const contextValue: MessageContextType = {
-    messages,
-    showMessage,
-    hideMessage,
-    clearMessages,
-    success,
-    error,
-    warning,
-    info
-  };
+  const error = useCallback(
+    (msg: string, title?: string, duration?: number) =>
+      showMessage({ type: 'error', message: msg, title, duration }),
+    [showMessage],
+  );
+
+  const warning = useCallback(
+    (msg: string, title?: string, duration?: number) =>
+      showMessage({ type: 'warning', message: msg, title, duration }),
+    [showMessage],
+  );
+
+  const info = useCallback(
+    (msg: string, title?: string, duration?: number) =>
+      showMessage({ type: 'info', message: msg, title, duration }),
+    [showMessage],
+  );
+
+  const contextValue = useMemo<MessageContextType>(
+    () => ({
+      messages,
+      showMessage,
+      hideMessage,
+      clearMessages,
+      success,
+      error,
+      warning,
+      info,
+    }),
+    [messages, showMessage, hideMessage, clearMessages, success, error, warning, info],
+  );
 
   return (
     <MessageContext.Provider value={contextValue}>
@@ -109,70 +108,62 @@ export const MessageProvider: React.FC<MessageProviderProps> = ({ children }) =>
   );
 };
 
-// 单个消息组件
-function MessageItem({ message: msg, onClose }: { message: MessageState; onClose: (id: string) => void }) {
-  const getIcon = () => {
-    switch (msg.type) {
-      case 'success': return '成功';
-      case 'error': return '失败';
-      case 'warning': return '警告';
-      case 'info': return '信息';
-      default: return '信息';
-    }
-  };
+interface MessageItemProps {
+  message: MessageState;
+  onClose: (id: string) => void;
+}
 
-  const getColors = () => {
-    switch (msg.type) {
-      case 'success': return 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200';
-      case 'error': return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200';
-      case 'warning': return 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200';
-      case 'info': return 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200';
-      default: return 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200';
-    }
-  };
+// 单条通知
+function MessageItem({ message: msg, onClose }: MessageItemProps) {
+  const tone = TONES[msg.type];
+  const Icon = tone.icon;
 
   return (
-    <div className={`
-      flex items-start p-4 border-2 rounded-xl shadow-lg backdrop-blur-sm
-      transform transition-all duration-300 ease-out
-      ${msg.isVisible ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-2 opacity-0 scale-95'}
-      ${getColors()}
-    `}>
-      <div className="text-2xl mr-3 flex-shrink-0">
-        {getIcon()}
-      </div>
-      <div className="flex-1 min-w-0">
-        {msg.title && (
-          <h4 className="font-semibold text-lg mb-1">{msg.title}</h4>
-        )}
-        <p className="text-sm leading-relaxed">{msg.message}</p>
+    <div
+      role="status"
+      className={cn(
+        'flex items-start gap-2.5 rounded-md border border-line bg-canvas px-3 py-2.5 shadow-lg',
+        'transition-all duration-200 ease-out',
+        msg.isVisible ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0',
+      )}
+    >
+      <Icon size={16} className={cn('mt-0.5 shrink-0', tone.iconClassName)} aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        {msg.title && <p className="text-sm font-semibold text-fg">{msg.title}</p>}
+        <p
+          className={cn(
+            'whitespace-pre-line break-words text-xs leading-relaxed',
+            msg.title ? 'mt-0.5 text-muted' : 'text-fg',
+          )}
+        >
+          {msg.message}
+        </p>
       </div>
       <button
+        type="button"
         onClick={() => onClose(msg.id)}
-        className="ml-3 flex-shrink-0 text-lg opacity-50 hover:opacity-100 transition-opacity"
+        aria-label="关闭通知"
+        className="-mr-1 -mt-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-neutral-subtle hover:text-fg"
       >
-        ✕
+        <X size={14} aria-hidden="true" />
       </button>
     </div>
   );
 }
 
-// 消息容器组件
+// 通知容器
 function MessageContainer() {
   const { messages, hideMessage } = useMessage();
 
   if (messages.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-[10000] space-y-3 max-w-md w-full pointer-events-none">
+    <div className="pointer-events-none fixed bottom-4 right-4 z-[10000] flex w-full max-w-sm flex-col gap-2">
       {messages.map((msg) => (
-        <div key={msg.id} className="pointer-events-auto">
-          <MessageItem 
-            message={msg} 
-            onClose={hideMessage} 
-          />
+        <div key={msg.id} className="pointer-events-auto animate-toast-in">
+          <MessageItem message={msg} onClose={hideMessage} />
         </div>
       ))}
     </div>
   );
-} 
+}

@@ -40,6 +40,8 @@ export default [
             '@typescript-eslint/no-explicit-any': 'off',
             '@typescript-eslint/ban-ts-comment': 'off',
             'react/react-in-jsx-scope': 'off',
+            // 组件属性已由 TypeScript 校验，无需运行时 prop-types
+            'react/prop-types': 'off',
         },
     },
     eslintConfigPrettier,

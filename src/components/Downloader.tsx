@@ -1,10 +1,40 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import {
+  CheckCircle2,
+  Clock,
+  Download,
+  ExternalLink,
+  FileVideo,
+  FolderOpen,
+  Link2,
+  Loader2,
+  Music,
+  RotateCw,
+  SlidersHorizontal,
+  X,
+  XCircle,
+} from 'lucide-react';
 import { useAppStore } from '../store/appStore';
-import { VideoData, PlayUrlData} from '../types/bilibili';
+import { DownloadItem, VideoData, PlayUrlData } from '../types/bilibili';
+import Button from './ui/Button';
+import { Card, CardBody, CardHeader, CardTitle } from './ui/Card';
 import CustomSelect from './ui/CustomSelect';
+import StatusLabel from './ui/StatusLabel';
 import { isTauriAvailable } from '../lib/tauri';
-import { useMessage } from './ui/MessageContext';
+import { useMessage } from './ui/message-context';
+
+/** 从 rust 端返回的提示语中提取实际文件路径，例如：下载完成: "/Users/me/Downloads/xxx.mp4" */
+function extractFilePath(message: string): string | undefined {
+  const match = message.match(/"([^"]+)"/);
+  return match?.[1];
+}
+
+function formatDuration(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes} 分 ${seconds} 秒` : `${seconds} 秒`;
+}
 
 export default function Downloader() {
   const [videoUrl, setVideoUrl] = useState('');
@@ -13,9 +43,17 @@ export default function Downloader() {
   const [showQualitySelector, setShowQualitySelector] = useState(false);
   const [streamData, setStreamData] = useState<PlayUrlData | null>(null);
   const [exportFolder, setExportFolder] = useState<string>('');
-  
-  const { downloads: downloadQueue, addDownloadItem, updateDownloadProgress, updateDownloadStatus, isLoggedIn, cookies } = useAppStore();
-  const { error, warning } = useMessage();
+
+  const {
+    downloads: downloadQueue,
+    addDownloadItem,
+    updateDownloadProgress,
+    updateDownloadStatus,
+    setDownloadFilePath,
+    isLoggedIn,
+    cookies,
+  } = useAppStore();
+  const { success, error, warning, info } = useMessage();
 
   // 提取视频 ID 的函数
   const extractVideoId = (url: string): string | null => {
@@ -24,7 +62,7 @@ export default function Downloader() {
       /(?:https?:\/\/)?(?:www\.)?bilibili\.com\/video\/av(\d+)/,
       /(?:https?:\/\/)?b23\.tv\/([a-zA-Z0-9]+)/,
       /^(BV[a-zA-Z0-9]+)$/,
-      /^av(\d+)$/
+      /^av(\d+)$/,
     ];
 
     for (const pattern of patterns) {
@@ -34,8 +72,8 @@ export default function Downloader() {
       }
     }
     return null;
-  };  
-  
+  };
+
   // 处理视频 URL 分析
   const handleAnalyzeVideo = async () => {
     if (!isTauriAvailable()) {
@@ -49,9 +87,12 @@ export default function Downloader() {
     }
 
     const videoId = extractVideoId(videoUrl.trim());
-    
+
     if (!videoId) {
-      error('无效的视频链接格式', '支持格式：\n- https://www.bilibili.com/video/BV...\n- https://www.bilibili.com/video/av...\n- https://b23.tv/...\n- BV...\n- av...');
+      error(
+        '支持格式：\n- https://www.bilibili.com/video/BV...\n- https://www.bilibili.com/video/av...\n- https://b23.tv/...\n- BV...\n- av...',
+        '无效的视频链接格式',
+      );
       return;
     }
 
@@ -60,15 +101,15 @@ export default function Downloader() {
     try {
       const videoData: VideoData = await invoke('get_video_info', { videoId });
       setCurrentVideoData(videoData);
-      
+
       if (isLoggedIn && cookies) {
         try {
-          const streamData: PlayUrlData = await invoke('get_video_streams', {
+          const streams: PlayUrlData = await invoke('get_video_streams', {
             videoId: videoData.bvid,
             cid: videoData.pages[0].cid,
-            cookies
+            cookies,
           });
-          setStreamData(streamData);
+          setStreamData(streams);
           setShowQualitySelector(true);
         } catch (streamError) {
           addDownloadItem({
@@ -76,7 +117,7 @@ export default function Downloader() {
             url: videoUrl,
             title: videoData.title,
             progress: 0,
-            status: 'pending'
+            status: 'pending',
           });
           setVideoUrl('');
           warning(`获取视频流失败：${streamError}`);
@@ -88,12 +129,12 @@ export default function Downloader() {
           url: videoUrl,
           title: videoData.title,
           progress: 0,
-          status: 'pending'
+          status: 'pending',
         });
         setVideoUrl('');
       }
-    } catch (error) {
-      warning(`分析视频失败：${error}`);
+    } catch (analyzeError) {
+      warning(`分析视频失败：${analyzeError}`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -103,29 +144,28 @@ export default function Downloader() {
   const handleQualitySelect = (videoStream: any, audioStream: any) => {
     if (!currentVideoData) return;
 
-    const downloadItem = {
+    addDownloadItem({
       id: Date.now().toString(),
       url: videoUrl,
       title: currentVideoData.title,
       progress: 0,
-      status: 'pending' as const,
+      status: 'pending',
       videoData: currentVideoData,
       selectedQuality: {
         video: videoStream,
-        audio: audioStream
-      }
-    };
-
-    addDownloadItem(downloadItem);
+        audio: audioStream,
+      },
+    });
 
     setVideoUrl('');
     setCurrentVideoData(null);
     setStreamData(null);
     setShowQualitySelector(false);
+    info(`已加入下载队列：${currentVideoData.title}`);
   };
 
   // 开始下载任务
-  const startDownload = async (downloadItem: any) => {
+  const startDownload = async (downloadItem: DownloadItem) => {
     if (!isTauriAvailable()) {
       updateDownloadStatus(downloadItem.id, 'failed');
       warning('Tauri 环境不可用，请在应用中使用此功能');
@@ -148,25 +188,26 @@ export default function Downloader() {
       updateDownloadStatus(downloadItem.id, 'downloading');
       updateDownloadProgress(downloadItem.id, 0);
 
-      const result = await invoke('download_video', {
+      const result = await invoke<string>('download_video', {
         videoData: downloadItem.videoData,
         videoStream: downloadItem.selectedQuality.video,
         audioStream: downloadItem.selectedQuality.audio,
-        cookies: cookies
+        cookies,
       });
 
       updateDownloadStatus(downloadItem.id, 'completed');
       updateDownloadProgress(downloadItem.id, 100);
-      warning(`下载完成: ${result}`);
-    } catch (error) {
+      setDownloadFilePath(downloadItem.id, extractFilePath(result));
+      success(`下载完成：${downloadItem.title}`);
+    } catch (downloadError) {
       updateDownloadStatus(downloadItem.id, 'failed');
-      warning(`下载失败：${error}`);
+      error(`下载失败：${downloadError}`);
     }
   };
 
   // 处理 Enter 键
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
       handleAnalyzeVideo();
     }
   };
@@ -181,14 +222,14 @@ export default function Downloader() {
     try {
       const folder = await invoke<string>('select_export_folder');
       setExportFolder(folder);
-      warning(`已选择导出文件夹: ${folder}`);
-    } catch (error) {
-      warning(`选择文件夹失败: ${error}`);
+      success(`已选择导出文件夹：${folder}`);
+    } catch (selectError) {
+      error(`选择文件夹失败：${selectError}`);
     }
   };
 
   // 导出文件到指定文件夹
-  const exportFileToFolder = async (filePath: string, newFilename?: string) => {
+  const exportFileToFolder = async (filePath: string) => {
     if (!exportFolder) {
       warning('请先选择导出文件夹');
       return;
@@ -203,11 +244,10 @@ export default function Downloader() {
       const exportedPath = await invoke<string>('export_file_to_folder', {
         sourcePath: filePath,
         targetFolder: exportFolder,
-        newFilename
       });
-      warning(`文件导出成功: ${exportedPath}`);
-    } catch (error) {
-      warning(`导出失败: ${error}`);
+      success(`文件已导出：${exportedPath}`);
+    } catch (exportError) {
+      error(`导出失败：${exportError}`);
     }
   };
 
@@ -223,11 +263,11 @@ export default function Downloader() {
       const result = await invoke<string>('convert_video_format', {
         inputPath: filePath,
         outputPath,
-        format
+        format,
       });
-      warning(`格式转换成功: ${result}`);
-    } catch (error) {
-      warning(`格式转换失败: ${error}`);
+      success(`格式转换完成：${result}`);
+    } catch (convertError) {
+      error(`格式转换失败：${convertError}`);
     }
   };
 
@@ -243,16 +283,21 @@ export default function Downloader() {
       const result = await invoke<string>('extract_audio', {
         videoPath: filePath,
         audioPath,
-        format
+        format,
       });
-      warning(`音频提取成功: ${result}`);
-    } catch (error) {
-      warning(`音频提取失败: ${error}`);
+      success(`音频提取完成：${result}`);
+    } catch (extractError) {
+      error(`音频提取失败：${extractError}`);
     }
   };
 
   // 打开文件夹
   const openFolder = async (folderPath: string) => {
+    if (!folderPath) {
+      warning('请先选择导出文件夹');
+      return;
+    }
+
     if (!isTauriAvailable()) {
       warning('请在 Tauri 应用中使用此功能');
       return;
@@ -260,266 +305,258 @@ export default function Downloader() {
 
     try {
       await invoke('open_folder', { folderPath });
-    } catch (error) {
-      warning(`打开文件夹失败: ${error}`);
+    } catch (openError) {
+      error(`打开文件夹失败：${openError}`);
+    }
+  };
+
+  // 取消清晰度选择
+  const cancelQualitySelect = () => {
+    setShowQualitySelector(false);
+    setCurrentVideoData(null);
+    setStreamData(null);
+  };
+
+  const renderStatusIcon = (status: DownloadItem['status']) => {
+    switch (status) {
+      case 'downloading':
+        return <Loader2 size={16} className="animate-spin text-accent-fg" aria-hidden="true" />;
+      case 'completed':
+        return <CheckCircle2 size={16} className="text-success-fg" aria-hidden="true" />;
+      case 'failed':
+        return <XCircle size={16} className="text-danger-fg" aria-hidden="true" />;
+      default:
+        return <Clock size={16} className="text-muted" aria-hidden="true" />;
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      <div className="max-w-6xl mx-auto py-8 px-4 space-y-8">
-        
-        {/* 页面标题 */}
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-pink-500 to-blue-500 rounded-full mb-4 shadow-lg">
-            <span className="text-3xl">🎬</span>
+    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8">
+      <div>
+        <h1 className="text-2xl font-semibold text-fg">下载</h1>
+        <p className="mt-1 text-sm text-muted">粘贴视频链接或 BV 号，选择清晰度后加入下载队列。</p>
+      </div>
+
+      {/* 视频链接输入区域 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <Link2 size={16} aria-hidden="true" />
+            添加下载任务
+          </CardTitle>
+        </CardHeader>
+        <CardBody className="space-y-3">
+          <label htmlFor="video-url" className="block text-sm font-semibold text-fg">
+            视频链接或 BV 号
+          </label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              id="video-url"
+              type="text"
+              value={videoUrl}
+              onChange={(event) => setVideoUrl(event.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="https://www.bilibili.com/video/BV... 或 BV1xx411c7mD"
+              className="h-8 flex-1 rounded-md border border-line bg-canvas px-3 font-mono text-sm text-fg outline-none transition-colors placeholder:font-sans placeholder:text-subtle-fg hover:border-muted focus:border-accent focus:ring-2 focus:ring-accent/30 disabled:opacity-60"
+              disabled={isAnalyzing}
+            />
+            <Button
+              variant="primary"
+              onClick={handleAnalyzeVideo}
+              disabled={isAnalyzing || !videoUrl.trim()}
+            >
+              {isAnalyzing ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                  解析中
+                </>
+              ) : (
+                '解析'
+              )}
+            </Button>
           </div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-pink-500 to-blue-500 bg-clip-text text-transparent mb-2">
-            DILIDILI 下载器
-          </h1>
-          <p className="text-lg text-gray-600 dark:text-gray-400">
-            高质量下载你喜欢的B站视频
+          <p className="text-xs text-subtle-fg">
+            支持 bilibili.com/video/BV…、av…、b23.tv 短链接，或直接输入 BV 号。
           </p>
-        </div>
+        </CardBody>
+      </Card>
 
-        {/* 视频链接输入区域 */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-          <div className="bg-gradient-to-r from-pink-500 to-blue-500 p-6">
-            <div className="flex items-center">
-              <div className="w-2 h-8 bg-white rounded mr-4 opacity-80"></div>
-              <h2 className="text-2xl font-bold text-white">
-                添加下载任务
-              </h2>
+      {/* 质量选择器 */}
+      {showQualitySelector && currentVideoData && streamData && (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <SlidersHorizontal size={16} aria-hidden="true" />
+              选择清晰度
+            </CardTitle>
+            <Button variant="ghost" size="sm" onClick={cancelQualitySelect}>
+              <X size={14} aria-hidden="true" />
+              取消
+            </Button>
+          </CardHeader>
+          <CardBody className="space-y-4">
+            <div className="flex gap-4">
+              <img
+                src={currentVideoData.pic}
+                alt={currentVideoData.title}
+                className="h-20 w-36 shrink-0 rounded-md border border-line object-cover"
+              />
+              <div className="min-w-0">
+                <h3 className="line-clamp-2 text-sm font-semibold text-fg">
+                  {currentVideoData.title}
+                </h3>
+                <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-muted">
+                  <dt>UP 主</dt>
+                  <dd className="truncate">{currentVideoData.owner_info?.name || '未知'}</dd>
+                  <dt>时长</dt>
+                  <dd>{formatDuration(currentVideoData.duration)}</dd>
+                  <dt>BV 号</dt>
+                  <dd className="truncate font-mono">{currentVideoData.bvid}</dd>
+                </dl>
+              </div>
             </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-sm font-semibold text-fg">视频清晰度</label>
+              <CustomSelect
+                options={streamData.video_streams.map((videoStream, index) => ({
+                  value: index,
+                  label: videoStream.description,
+                  description: videoStream.format ? `格式：${videoStream.format}` : undefined,
+                  filesize: videoStream.filesize,
+                }))}
+                onChange={(selectedIndex) => {
+                  const selectedVideo = streamData.video_streams[selectedIndex as number];
+                  const selectedAudio = streamData.audio_streams[0];
+                  handleQualitySelect(selectedVideo, selectedAudio);
+                }}
+                placeholder="请选择视频清晰度"
+              />
+              <p className="text-xs text-subtle-fg">选择后会自动加入下载队列，音频流将自动合并。</p>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* 下载队列 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <Download size={16} aria-hidden="true" />
+            下载队列
+            <span className="font-normal text-muted">({downloadQueue.length})</span>
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={selectExportFolder}>
+              <FolderOpen size={14} aria-hidden="true" />
+              导出文件夹
+            </Button>
+            <Button size="sm" onClick={() => openFolder(exportFolder)} disabled={!exportFolder}>
+              <ExternalLink size={14} aria-hidden="true" />
+              打开
+            </Button>
           </div>
-          
-          <div className="p-8 space-y-6">
-            <div>
-              <label htmlFor="video-url" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                视频链接或 BV 号
-              </label>
-              <div className="flex space-x-3">
-                <input
-                  id="video-url"
-                  type="text"
-                  value={videoUrl}
-                  onChange={(e) => setVideoUrl(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="https://www.bilibili.com/video/BV... 或直接输入 BV 号"
-                  className="flex-1 px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-all"
-                  disabled={isAnalyzing}
-                />
-                <button
-                  onClick={handleAnalyzeVideo}
-                  disabled={isAnalyzing || !videoUrl.trim()}
-                  className="px-8 py-3 bg-gradient-to-r from-pink-500 to-blue-500 text-white rounded-xl hover:from-pink-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-all shadow-lg hover:shadow-xl"
-                >
-                  {isAnalyzing ? '分析中...' : '解析'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        </CardHeader>
 
-        {/* 质量选择器 */}
-        {showQualitySelector && currentVideoData && streamData && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-6">
-              <h2 className="text-2xl font-bold text-white">
-                选择下载质量
-              </h2>
-            </div>
-            
-            <div className="p-8">
-              {/* 视频信息预览和清晰度选择整合 */}
-              <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600 rounded-xl p-6 space-y-6">
-                {/* 视频信息 */}
-                <div className="flex space-x-6">
-                  <img
-                    src={currentVideoData.pic}
-                    alt={currentVideoData.title}
-                    className="w-40 h-24 object-cover rounded-lg shadow-lg"
-                  />
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                      {currentVideoData.title}
-                    </h3>
-                    <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
-                      <span className="flex items-center">
-                        UP主：{currentVideoData.owner_info?.name || '未知'}
-                      </span>
-                      <span className="flex items-center">
-                        时长：{Math.floor(currentVideoData.duration / 60)}分{currentVideoData.duration % 60}秒
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 清晰度选择 */}
-                <div className="space-y-3 relative">
-                  <label className="block text-lg font-semibold text-gray-700 dark:text-gray-300">
-                    选择清晰度：
-                  </label>
-                  <CustomSelect
-                    options={streamData.video_streams.map((videoStream, index) => ({
-                      value: index,
-                      label: videoStream.description,
-                      description: videoStream.format ? `格式: ${videoStream.format}` : undefined,
-                      filesize: videoStream.filesize
-                    }))}
-                    onChange={(selectedIndex) => {
-                      const selectedVideo = streamData.video_streams[selectedIndex as number];
-                      const selectedAudio = streamData.audio_streams[0];
-                      handleQualitySelect(selectedVideo, selectedAudio);
-                    }}
-                    placeholder="请选择视频清晰度"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => {
-                    setShowQualitySelector(false);
-                    setCurrentVideoData(null);
-                    setStreamData(null);
-                  }}
-                  className="px-6 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 rounded-lg transition-all"
-                >
-                  取消
-                </button>
-              </div>
-            </div>
+        {exportFolder && (
+          <div className="flex items-center gap-2 border-b border-line bg-subtle px-4 py-2 text-xs text-muted">
+            <FolderOpen size={12} className="shrink-0" aria-hidden="true" />
+            <span className="truncate font-mono">{exportFolder}</span>
           </div>
         )}
 
-        {/* 下载队列 */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-          <div className="bg-gradient-to-r from-green-500 to-teal-500 p-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-white">
-                下载队列 ({downloadQueue.length})
-              </h2>
-              <div className="flex space-x-3">
-                <button
-                  onClick={selectExportFolder}
-                  className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm font-medium transition-all"
-                >
-                  选择导出文件夹
-                </button>
-                <button
-                  onClick={() => openFolder(exportFolder || '')}
-                  disabled={!exportFolder}
-                  className="px-4 py-2 bg-white/20 hover:bg-white/30 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-all"
-                >
-                  打开文件夹
-                </button>
-              </div>
+        {downloadQueue.length === 0 ? (
+          <div className="px-4 py-12 text-center">
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-line bg-subtle text-muted">
+              <Download size={18} aria-hidden="true" />
             </div>
-            {exportFolder && (
-              <p className="text-white/80 text-sm mt-2">当前导出文件夹: {exportFolder}</p>
-            )}
+            <p className="mt-3 text-sm font-semibold text-fg">暂无下载任务</p>
+            <p className="mt-1 text-xs text-subtle-fg">在上方粘贴视频链接开始下载。</p>
           </div>
-          
-          <div className="p-8">
-            {downloadQueue.length === 0 ? (
-              <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-                <div className="w-24 h-24 mx-auto mb-6 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
-                  <span className="text-4xl">📥</span>
-                </div>
-                <p className="text-xl font-medium mb-2">暂无下载任务</p>
-                <p className="text-gray-400">添加视频链接开始下载</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {downloadQueue.map((item) => (
-                  <div key={item.id} className="border-2 border-gray-100 dark:border-gray-700 rounded-xl p-6 hover:border-blue-200 dark:hover:border-blue-700 transition-all">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-bold text-gray-900 dark:text-white truncate flex-1 text-lg">
-                        {item.title}
-                      </h3>
-                      <div className="flex items-center space-x-3">
-                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                          item.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' :
-                          item.status === 'downloading' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' :
-                          item.status === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' :
-                          'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                        }`}>
-                          {item.status === 'pending' ? '等待中' :
-                           item.status === 'downloading' ? '下载中' :
-                           item.status === 'completed' ? '已完成' :
-                           item.status === 'failed' ? '失败' : item.status}
-                        </span>
-                        {item.status === 'pending' && (
-                          <button
-                            onClick={() => startDownload(item)}
-                            className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg text-sm hover:from-blue-600 hover:to-purple-600 transition-all shadow-lg"
-                          >
-                            开始
-                          </button>
-                        )}
-                        {item.status === 'failed' && (
-                          <button
-                            onClick={() => {
-                              updateDownloadStatus(item.id, 'pending');
-                              startDownload(item);
-                            }}
-                            className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg text-sm hover:from-orange-600 hover:to-red-600 transition-all shadow-lg"
-                          >
-                            重试
-                          </button>
-                        )}
-                        {item.status === 'completed' && (
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => exportFileToFolder(`/Users/mcell/Downloads/DILIDILI/${item.title.replace(/[^a-zA-Z0-9\s\-_]/g, '_')}.mp4`)}
-                              className="px-3 py-1 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg text-xs hover:from-blue-600 hover:to-purple-600 transition-all"
-                            >
-                              导出
-                            </button>
-                            <button
-                              onClick={() => convertVideoFormat(`/Users/mcell/Downloads/DILIDILI/${item.title.replace(/[^a-zA-Z0-9\s\-_]/g, '_')}.mp4`, 'avi')}
-                              className="px-3 py-1 bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-lg text-xs hover:from-green-600 hover:to-teal-600 transition-all"
-                            >
-                              转换
-                            </button>
-                            <button
-                              onClick={() => extractAudio(`/Users/mcell/Downloads/DILIDILI/${item.title.replace(/[^a-zA-Z0-9\s\-_]/g, '_')}.mp4`, 'mp3')}
-                              className="px-3 py-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-lg text-xs hover:from-yellow-600 hover:to-orange-600 transition-all"
-                            >
-                              提取音频
-                            </button>
-                          </div>
-                        )}
-                      </div>
+        ) : (
+          <ul className="divide-y divide-line">
+            {downloadQueue.map((item) => (
+              <li
+                key={item.id}
+                className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start"
+              >
+                <div className="flex min-w-0 flex-1 gap-3">
+                  <div className="mt-0.5 shrink-0">{renderStatusIcon(item.status)}</div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="truncate text-sm font-semibold text-fg">{item.title}</h3>
+                      <StatusLabel status={item.status} />
                     </div>
-                    
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-3 truncate">
-                      {item.url}
+
+                    <p className="mt-1 flex items-center gap-1 text-xs text-subtle-fg">
+                      <Link2 size={12} className="shrink-0" aria-hidden="true" />
+                      <span className="truncate font-mono">{item.url}</span>
                     </p>
-                    
-                    {item.status === 'downloading' && (
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-2">
-                        <div 
-                          className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-300"
-                          style={{ width: `${item.progress}%` }}
-                        ></div>
+
+                    {(item.status === 'downloading' || item.progress > 0) && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-neutral-subtle">
+                          <div
+                            className="h-full rounded-full bg-accent transition-[width] duration-300"
+                            style={{ width: `${Math.min(100, Math.max(0, item.progress))}%` }}
+                          />
+                        </div>
+                        <span className="w-10 text-right text-xs tabular-nums text-muted">
+                          {item.progress}%
+                        </span>
                       </div>
                     )}
-                    
-                    {item.progress > 0 && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        进度: {item.progress}%
+
+                    {item.status === 'completed' && item.filePath && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button size="sm" onClick={() => exportFileToFolder(item.filePath!)}>
+                          <Download size={12} aria-hidden="true" />
+                          导出
+                        </Button>
+                        <Button size="sm" onClick={() => convertVideoFormat(item.filePath!, 'avi')}>
+                          <FileVideo size={12} aria-hidden="true" />
+                          转码为 AVI
+                        </Button>
+                        <Button size="sm" onClick={() => extractAudio(item.filePath!, 'mp3')}>
+                          <Music size={12} aria-hidden="true" />
+                          提取音频
+                        </Button>
+                      </div>
+                    )}
+
+                    {item.status === 'completed' && !item.filePath && (
+                      <p className="mt-2 text-xs text-subtle-fg">
+                        文件已保存到系统下载目录的 DILIDILI 文件夹。
                       </p>
                     )}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-        
-      </div>
+                </div>
+
+                <div className="flex shrink-0 items-center justify-end gap-2">
+                  {item.status === 'pending' && (
+                    <Button size="sm" variant="primary" onClick={() => startDownload(item)}>
+                      开始下载
+                    </Button>
+                  )}
+                  {item.status === 'failed' && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        updateDownloadStatus(item.id, 'pending');
+                        startDownload(item);
+                      }}
+                    >
+                      <RotateCw size={12} aria-hidden="true" />
+                      重试
+                    </Button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </div>
   );
-} 
+}

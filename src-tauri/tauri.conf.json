@@ -15,6 +15,8 @@
         "title": "DILIDILI - 哔哩哔哩视频下载器",
         "width": 1200,
         "height": 800,
+        "minWidth": 720,
+        "minHeight": 520,
         "resizable": true,
         "fullscreen": false,
         "decorations": true,

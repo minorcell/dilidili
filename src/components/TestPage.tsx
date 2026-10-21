@@ -1,6 +1,22 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import {
+  Activity,
+  CheckCircle2,
+  FlaskConical,
+  Loader2,
+  Play,
+  Terminal,
+  Trash2,
+  XCircle,
+  Zap,
+} from 'lucide-react';
 import { useAppStore } from '../store/appStore';
+import Button from './ui/Button';
+import { Card, CardBody, CardHeader, CardTitle } from './ui/Card';
+import StatusLabel from './ui/StatusLabel';
+import { isTauriAvailable } from '../lib/tauri';
+import { cn } from '../lib/utils';
 
 export default function TestPage() {
   const [testResult, setTestResult] = useState<string>('');
@@ -10,71 +26,84 @@ export default function TestPage() {
   const runDownloadTest = async () => {
     setIsRunning(true);
     setTestResult('开始测试下载功能...\n');
-    
+
     try {
       // 1. 检查环境
-      const isTauri = typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__;
-      setTestResult(prev => prev + `Tauri环境: ${isTauri ? '正常' : '未检测到'}\n`);
-      
+      const isTauri = isTauriAvailable();
+      setTestResult((prev) => prev + `Tauri 环境: ${isTauri ? '正常' : '未检测到'}\n`);
+
       // 2. 检查登录状态
-      setTestResult(prev => prev + `登录状态: ${isLoggedIn ? '已登录' : '未登录'}\n`);
-      setTestResult(prev => prev + `Cookies: ${cookies ? '已获取 (长度:' + cookies.length + ')' : '无数据'}\n`);
-      
+      setTestResult((prev) => prev + `登录状态: ${isLoggedIn ? '已登录' : '未登录'}\n`);
+      setTestResult(
+        (prev) => prev + `Cookies: ${cookies ? `已获取 (长度 ${cookies.length})` : '无数据'}\n`,
+      );
+
       // 3. 检查下载队列
-      setTestResult(prev => prev + `下载队列: ${downloads.length} 项任务\n`);
-      
+      setTestResult((prev) => prev + `下载队列: ${downloads.length} 项任务\n`);
+
       if (!isTauri) {
-        setTestResult(prev => prev + '请在Tauri应用中运行测试 (pnpm tauri dev)\n');
+        setTestResult((prev) => prev + '请在 Tauri 应用中运行测试 (pnpm tauri dev)\n');
         return;
       }
-      
+
       if (!isLoggedIn || !cookies) {
-        setTestResult(prev => prev + '请先登录哔哩哔哩账号\n');
+        setTestResult((prev) => prev + '请先登录哔哩哔哩账号\n');
         return;
       }
 
       // 4. 测试视频信息获取
-      setTestResult(prev => prev + '\n测试视频信息获取...\n');
+      setTestResult((prev) => prev + '\n测试视频信息获取...\n');
       const testVideoId = 'BV1qEVazqEv3';
-      
+
       try {
         const videoData = await invoke('get_video_info', { videoId: testVideoId });
-        setTestResult(prev => prev + `视频信息获取成功: ${(videoData as any).title}\n`);
-        setTestResult(prev => prev + `视频时长: ${Math.floor((videoData as any).duration / 60)}分${(videoData as any).duration % 60}秒\n`);
-        setTestResult(prev => prev + `UP主: ${(videoData as any).owner.name}\n`);
-        
+        setTestResult((prev) => prev + `视频信息获取成功: ${(videoData as any).title}\n`);
+        setTestResult(
+          (prev) =>
+            prev +
+            `视频时长: ${Math.floor((videoData as any).duration / 60)}分${(videoData as any).duration % 60}秒\n`,
+        );
+        setTestResult((prev) => prev + `UP 主: ${(videoData as any).owner.name}\n`);
+
         // 5. 测试视频流获取
-        setTestResult(prev => prev + '\n测试视频流获取...\n');
+        setTestResult((prev) => prev + '\n测试视频流获取...\n');
         const streamData = await invoke('get_video_streams', {
           videoId: (videoData as any).bvid,
           cid: (videoData as any).pages[0].cid,
-          cookies
+          cookies,
         });
-        
-        setTestResult(prev => prev + `视频流获取成功: ${(streamData as any).video_streams.length} 个质量选项\n`);
-        setTestResult(prev => prev + `音频流: ${(streamData as any).audio_streams.length} 个质量选项\n`);
-        
+
+        setTestResult(
+          (prev) =>
+            prev + `视频流获取成功: ${(streamData as any).video_streams.length} 个质量选项\n`,
+        );
+        setTestResult(
+          (prev) => prev + `音频流: ${(streamData as any).audio_streams.length} 个质量选项\n`,
+        );
+
         // 显示可用质量
-        const qualities = (streamData as any).video_streams.map((stream: any) => stream.description).join(', ');
-        setTestResult(prev => prev + `可用质量: ${qualities}\n`);
-        
+        const qualities = (streamData as any).video_streams
+          .map((stream: any) => stream.description)
+          .join(', ');
+        setTestResult((prev) => prev + `可用质量: ${qualities}\n`);
+
         // 6. 测试下载命令（不实际下载，只测试调用）
-        setTestResult(prev => prev + '\n测试下载命令调用...\n');
-        
+        setTestResult((prev) => prev + '\n测试下载命令调用...\n');
+
         const selectedVideo = (streamData as any).video_streams[0];
         const selectedAudio = (streamData as any).audio_streams[0];
-        
-        setTestResult(prev => prev + `选择视频质量: ${selectedVideo.description} (${selectedVideo.codecs})\n`);
-        setTestResult(prev => prev + `选择音频质量: ${selectedAudio.quality} kbps\n`);
-        
-        setTestResult(prev => prev + '\n所有测试通过！系统功能正常，可以开始下载。\n');
-        
+
+        setTestResult(
+          (prev) => prev + `选择视频质量: ${selectedVideo.description} (${selectedVideo.codecs})\n`,
+        );
+        setTestResult((prev) => prev + `选择音频质量: ${selectedAudio.quality} kbps\n`);
+
+        setTestResult((prev) => prev + '\n所有测试通过！系统功能正常，可以开始下载。\n');
       } catch (videoError) {
-        setTestResult(prev => prev + `视频相关测试失败: ${videoError}\n`);
+        setTestResult((prev) => prev + `视频相关测试失败: ${videoError}\n`);
       }
-      
     } catch (error) {
-      setTestResult(prev => prev + `测试过程出现错误: ${error}\n`);
+      setTestResult((prev) => prev + `测试过程出现错误: ${error}\n`);
     } finally {
       setIsRunning(false);
     }
@@ -86,201 +115,166 @@ export default function TestPage() {
 
   const runQuickTest = async () => {
     setTestResult('快速环境检查...\n');
-    
-    const isTauri = typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__;
-    setTestResult(prev => prev + `Tauri: ${isTauri ? '是' : '否'} | 登录: ${isLoggedIn ? '是' : '否'} | 队列: ${downloads.length}项\n`);
-    
+
+    const isTauri = isTauriAvailable();
+    setTestResult(
+      (prev) =>
+        prev +
+        `Tauri: ${isTauri ? '是' : '否'} | 登录: ${isLoggedIn ? '是' : '否'} | 队列: ${downloads.length} 项\n`,
+    );
+
     if (userProfile) {
-      setTestResult(prev => prev + `当前用户: ${userProfile.name} (UID: ${userProfile.mid})\n`);
+      setTestResult((prev) => prev + `当前用户: ${userProfile.name} (UID: ${userProfile.mid})\n`);
       if (userProfile.vip_type > 0) {
-        setTestResult(prev => prev + `会员类型: ${userProfile.vip_type === 1 ? '月度大会员' : '年度大会员'}\n`);
+        setTestResult(
+          (prev) =>
+            prev + `会员类型: ${userProfile.vip_type === 1 ? '月度大会员' : '年度大会员'}\n`,
+        );
       }
     }
   };
 
+  const tauriReady = isTauriAvailable();
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
-        
-        {/* 页面头部 */}
-        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-3xl p-8 shadow-xl border border-gray-200/50 dark:border-gray-700/50">
-          <div className="flex items-center space-x-4 mb-6">
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">
-                测试中心
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400">
-                检测下载功能状态和系统环境
-              </p>
-            </div>
-          </div>
-          
-          {/* 操作按钮 */}
-          <div className="flex flex-wrap gap-4">
-            <button
-              onClick={runDownloadTest}
-              disabled={isRunning}
-              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:from-blue-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed font-semibold shadow-lg hover:shadow-xl transition-all transform hover:scale-105 flex items-center space-x-2"
-            >
+    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8">
+      <div>
+        <h1 className="text-2xl font-semibold text-fg">测试</h1>
+        <p className="mt-1 text-sm text-muted">检查运行环境、登录状态与下载链路是否正常。</p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <FlaskConical size={16} aria-hidden="true" />
+            测试操作
+          </CardTitle>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" onClick={runDownloadTest} disabled={isRunning}>
               {isRunning ? (
                 <>
-                  <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
-                  <span>运行中...</span>
+                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                  运行中
                 </>
               ) : (
                 <>
-                  <span>完整功能测试</span>
+                  <Play size={14} aria-hidden="true" />
+                  完整功能测试
                 </>
               )}
-            </button>
-            
-            <button
-              onClick={runQuickTest}
-              className="px-6 py-3 bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-xl hover:from-green-600 hover:to-teal-600 font-semibold shadow-lg hover:shadow-xl transition-all transform hover:scale-105 flex items-center space-x-2"
-            >
-              <span>快速检查</span>
-            </button>
-            
-            <button
-              onClick={clearTest}
-              className="px-6 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl font-semibold transition-all flex items-center space-x-2"
-            >
-              <span>清除结果</span>
-            </button>
+            </Button>
+            <Button onClick={runQuickTest}>
+              <Zap size={14} aria-hidden="true" />
+              快速检查
+            </Button>
+            <Button variant="ghost" onClick={clearTest} disabled={!testResult}>
+              <Trash2 size={14} aria-hidden="true" />
+              清除结果
+            </Button>
           </div>
-        </div>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
-          {/* 系统状态 */}
-          <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-3xl p-6 shadow-xl border border-gray-200/50 dark:border-gray-700/50">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="w-3 h-8 bg-gradient-to-b from-green-500 to-teal-500 rounded-full"></div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">系统状态</h2>
+        </CardHeader>
+      </Card>
+
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        {/* 系统状态 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <Activity size={16} aria-hidden="true" />
+              系统状态
+            </CardTitle>
+          </CardHeader>
+          <dl className="divide-y divide-line text-sm">
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+              <dt className="text-muted">运行环境</dt>
+              <dd className="flex items-center gap-1.5 font-medium text-fg">
+                {tauriReady ? (
+                  <CheckCircle2 size={14} className="text-success-fg" aria-hidden="true" />
+                ) : (
+                  <XCircle size={14} className="text-danger-fg" aria-hidden="true" />
+                )}
+                {tauriReady ? 'Tauri 桌面应用' : '浏览器环境'}
+              </dd>
             </div>
-            
-            <div className="space-y-4">
-              {/* 登录状态卡片 */}
-              <div className={`p-4 rounded-2xl ${isLoggedIn ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'}`}>
-                <div className="flex items-center space-x-3">
-                  <div>
-                    <p className="font-semibold text-gray-900 dark:text-white">
-                      登录状态: {isLoggedIn ? '已登录' : '未登录'}
-                    </p>
-                    {userProfile && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        用户: {userProfile.name} (UID: {userProfile.mid})
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              {/* Cookies状态 */}
-              <div className={`p-4 rounded-2xl ${cookies ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800' : 'bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600'}`}>
-                <div className="flex items-center space-x-3">
-                  <div>
-                    <p className="font-semibold text-gray-900 dark:text-white">
-                      认证信息: {cookies ? `已获取 (${cookies.length} 字符)` : '未获取'}
-                    </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {cookies ? '可以进行下载操作' : '需要登录获取认证信息'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              {/* 下载队列 */}
-              <div className={`p-4 rounded-2xl ${downloads.length > 0 ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800' : 'bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600'}`}>
-                <div className="flex items-center space-x-3">
-                  <div>
-                    <p className="font-semibold text-gray-900 dark:text-white">
-                      下载队列: {downloads.length} 项任务
-                    </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {downloads.length > 0 ? '有待处理的下载任务' : '暂无下载任务'}
-                    </p>
-                  </div>
-                </div>
-              </div>
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+              <dt className="text-muted">登录状态</dt>
+              <dd
+                className={cn(
+                  'flex items-center gap-1.5 font-medium',
+                  isLoggedIn ? 'text-success-fg' : 'text-muted',
+                )}
+              >
+                <span
+                  className={cn('h-2 w-2 rounded-full', isLoggedIn ? 'bg-success' : 'bg-muted')}
+                  aria-hidden="true"
+                />
+                {isLoggedIn ? '已登录' : '未登录'}
+              </dd>
             </div>
-          </div>
-          
-          {/* 测试结果 */}
-          <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-3xl p-6 shadow-xl border border-gray-200/50 dark:border-gray-700/50">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="w-3 h-8 bg-gradient-to-b from-purple-500 to-pink-500 rounded-full"></div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">测试结果</h2>
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+              <dt className="text-muted">当前用户</dt>
+              <dd className="min-w-0 truncate font-medium text-fg">
+                {userProfile ? `${userProfile.name}（UID ${userProfile.mid}）` : '—'}
+              </dd>
             </div>
-            
-            <div className="bg-gradient-to-br from-gray-900 to-gray-800 text-green-400 p-6 rounded-2xl font-mono text-sm shadow-inner max-h-96 overflow-y-auto">
-              <div className="flex items-center space-x-2 mb-4 text-white">
-                <span className="w-3 h-3 bg-red-500 rounded-full"></span>
-                <span className="w-3 h-3 bg-yellow-500 rounded-full"></span>
-                <span className="w-3 h-3 bg-green-500 rounded-full"></span>
-                <span className="text-sm ml-2">DILIDILI 测试终端</span>
-              </div>
-              <pre className="whitespace-pre-wrap leading-relaxed">
-                {testResult || '点击上方按钮开始测试...\n\n完整功能测试 - 检测所有下载相关功能\n快速检查 - 仅检查基本环境状态'}
-              </pre>
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+              <dt className="text-muted">认证信息</dt>
+              <dd className="font-medium text-fg">
+                {cookies ? `已获取（${cookies.length} 字符）` : '未获取'}
+              </dd>
             </div>
-          </div>
-        </div>
-        
-        {/* 下载队列详情 */}
-        {downloads.length > 0 && (
-          <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-3xl p-6 shadow-xl border border-gray-200/50 dark:border-gray-700/50">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="w-3 h-8 bg-gradient-to-b from-orange-500 to-red-500 rounded-full"></div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">下载队列详情</h2>
-              <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-full text-sm font-semibold">
-                {downloads.length} 项
-              </span>
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+              <dt className="text-muted">下载队列</dt>
+              <dd className="font-medium text-fg">{downloads.length} 项任务</dd>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {downloads.map((item, index) => (
-                <div key={item.id} className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600 rounded-2xl border border-gray-200 dark:border-gray-600">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
-                        {item.title}
-                      </h3>
-                      <div className="space-y-1 text-sm">
-                                                 <div className="flex items-center space-x-2">
-                           <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                             item.status === 'completed' ? 'bg-green-100 text-green-800' :
-                             item.status === 'downloading' ? 'bg-blue-100 text-blue-800' :
-                             item.status === 'failed' ? 'bg-red-100 text-red-800' :
-                             'bg-yellow-100 text-yellow-800'
-                           }`}>
-                             {item.status === 'completed' && '完成'}
-                             {item.status === 'downloading' && '下载中'}
-                             {item.status === 'failed' && '失败'}
-                             {item.status === 'pending' && '等待中'}
-                             {item.status === 'completed' ? '已完成' : 
-                              item.status === 'downloading' ? '下载中' : 
-                              item.status === 'failed' ? '失败' : '等待中'}
-                           </span>
-                         </div>
-                        <p className="text-gray-600 dark:text-gray-400">
-                          视频数据: {item.videoData ? '已获取' : '未获取'}
-                        </p>
-                        <p className="text-gray-600 dark:text-gray-400">
-                          质量选择: {item.selectedQuality ? '已选择' : '未选择'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+          </dl>
+        </Card>
+
+        {/* 测试结果 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <Terminal size={16} aria-hidden="true" />
+              测试输出
+            </CardTitle>
+          </CardHeader>
+          <CardBody>
+            <pre className="custom-scrollbar min-h-64 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-inset p-3 font-mono text-xs leading-relaxed text-fg">
+              {testResult ||
+                '点击「完整功能测试」或「快速检查」开始。\n\n完整功能测试 — 检测所有下载相关功能\n快速检查 — 仅检查基本环境状态'}
+            </pre>
+          </CardBody>
+        </Card>
       </div>
+
+      {/* 下载队列详情 */}
+      {downloads.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              下载队列详情
+              <span className="font-normal text-muted">({downloads.length})</span>
+            </CardTitle>
+          </CardHeader>
+          <ul className="divide-y divide-line">
+            {downloads.map((item) => (
+              <li
+                key={item.id}
+                className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate text-sm font-medium text-fg">{item.title}</span>
+                  <StatusLabel status={item.status} showIcon={false} />
+                </div>
+                <span className="text-xs text-muted">
+                  视频数据 {item.videoData ? '已获取' : '未获取'} · 清晰度{' '}
+                  {item.selectedQuality ? '已选择' : '未选择'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
     </div>
   );
-} 
+}
