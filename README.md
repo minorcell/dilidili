@@ -1,127 +1,89 @@
-# 🎬 DILIDILI - 哔哩哔哩视频下载器
+# 🎬 DILIDILI
 
-一个现代化的哔哩哔哩视频下载器，支持高质量视频下载、音视频自动合并、格式转换等功能。
+**把喜欢的 B 站视频，稳稳当当保存到本地。**
 
-![DILIDILI](https://img.shields.io/badge/Platform-Desktop-blue) ![Tauri](https://img.shields.io/badge/Framework-Tauri-orange) ![React](https://img.shields.io/badge/Frontend-React-61DAFB) ![Rust](https://img.shields.io/badge/Backend-Rust-orange)
+DILIDILI 是一款免费、开源的哔哩哔哩视频下载工具，支持 Windows、macOS 和 Linux。
+粘贴链接、选好画质，剩下的交给它。
 
-## ✨ 功能特性
+[⬇️ 下载最新版本](https://github.com/minorcell/dilidili/releases/latest) · [🌐 访问官网](https://dilidili.mcell.top) · [💬 反馈问题](https://github.com/minorcell/dilidili/issues)
 
-### 🚀 核心功能
-- **🎥 高质量视频下载** - 支持最高4K分辨率
-- **🔊 音视频自动合并** - 使用FFmpeg自动合并音视频流
-- **🔐 登录认证** - 支持二维码登录，获取会员权限
-- **📱 多格式支持** - 支持各种哔哩哔哩链接格式
+## ✨ 为什么用它
 
-### 🛠️ 高级功能
-- **📁 文件导出** - 选择目标文件夹导出视频
-- **🔄 格式转换** - 支持MP4、AVI、MKV格式转换
-- **🎵 音频提取** - 提取MP3、AAC、WAV音频
-- **📊 下载管理** - 实时进度显示和队列管理
-  
-## 🏗️ 技术架构
+- **链接一贴就解析** —— 支持完整视频链接、`b23.tv` 短链，也可以直接输入 BV / av 号
+- **画质不将就** —— 从流畅到 4K，视频支持什么就能选什么
+- **下载即成品** —— 音视频自动合并，不用再手动处理
+- **登录解锁高清** —— 扫码登录 B 站账号，获取更高清晰度的视频流
+- **格式随你定** —— 支持 MP4 / AVI / MKV 转换，也能提取 MP3 / AAC / WAV 音频
+- **文件好整理** —— 自定义导出目录，下载后可一键打开所在文件夹
+- **进度看得见** —— 下载队列与实时进度，任务状态一目了然
+- **数据不出本机** —— 下载、合并、转码全部在你的电脑上完成
 
-- **前端**: React 18 + TypeScript + Tailwind CSS
-- **后端**: Rust + Tauri 2.0
-- **音视频处理**: FFmpeg
-- **状态管理**: Zustand
-- **构建工具**: Vite + pnpm
+## 🚀 三步开始
 
-## 📦 安装使用
+1. **安装** —— 前往 [Releases](https://github.com/minorcell/dilidili/releases/latest) 下载并打开应用
+2. **登录** —— 点击登录，用手机扫码并确认
+3. **下载** —— 粘贴视频链接，选择画质，开始下载
 
-### 系统要求
-- macOS 10.15+ / Windows 10+ / Linux
-- Node.js 18+
-- Rust 1.70+
-- pnpm
+> 下载前需要先登录：B 站要求登录后才能获取视频流。
 
-### 开发环境搭建
+## 🔗 支持的链接
 
-1. **克隆项目**
-```bash
-git clone https://github.com/minorcell/DILIDILI.git
-cd DILIDILI
+```
+https://www.bilibili.com/video/BV...
+https://www.bilibili.com/video/av...
+https://b23.tv/...
+BV... / av...
 ```
 
-2. **安装依赖**
-```bash
-# 安装前端依赖
-pnpm install
+## 💻 系统要求
 
-# 安装Rust依赖（自动）
-cd src-tauri
-cargo build
-```
+- Windows 10 及以上
+- macOS 10.15 及以上
+- Linux
 
-3. **启动开发服务器**
-```bash
-pnpm tauri dev
-```
+## ❓ 常见问题
 
-### 生产构建
+**下载的文件没有声音？**
+应用会自动合并音视频；如果合并失败，请确认安装包完整（已内置音视频处理工具），或重新下载最新版本。
 
-```bash
-pnpm tauri build
-```
+**登录信息安全吗？**
+登录信息只保存在你的本机，仅用于向 B 站请求视频流，不会上传到其他服务器。
 
-## 🎯 使用方法
+**可以下载多个视频吗？**
+可以逐个添加任务，所有任务都会出现在下载队列中，方便统一查看和管理。
 
-1. **登录账号**
-   - 点击登录按钮
-   - 使用手机扫描二维码
-   - 在手机上确认登录
+**能下载多高的画质？**
+画质上限取决于视频本身和你的账号权限，最高支持 4K。
 
-2. **下载视频**
-   - 复制哔哩哔哩视频链接
-   - 粘贴到输入框中
-   - 选择视频质量
-   - 开始下载
+## 🛠 开发与构建
 
-3. **管理文件**
-   - 选择导出文件夹
-   - 转换视频格式
-   - 提取音频文件
+<details>
+<summary>展开查看</summary>
 
-## 🔧 配置说明
-
-### FFmpeg配置
-项目已内置FFmpeg可执行文件，位于`resources/ffmpeg`。如果需要使用系统FFmpeg：
+需要 Node.js 18+、Rust 1.70+ 和 pnpm。
 
 ```bash
-brew install ffmpeg  # macOS
+pnpm install     # 安装依赖
+pnpm tauri dev   # 本地开发
+pnpm tauri build # 打包应用
+pnpm lint        # 代码检查
 ```
 
-### 开发配置
-- 修改`src-tauri/tauri.conf.json`调整应用配置
-- 修改`vite.config.ts`调整开发服务器配置
-
-## 🤝 贡献指南
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 打开 Pull Request
+</details>
 
 ## 📄 许可证
 
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+本项目采用 MIT 许可证，详见 [LICENSE](LICENSE)。
 
 ## ⚠️ 免责声明
 
-本工具仅供个人学习和研究使用，请遵守相关法律法规和哔哩哔哩的使用条款。下载的内容仅限个人使用，禁止用于商业用途。
-
-## 🙏 致谢
-
-- [Tauri](https://tauri.app/) - 跨平台应用框架
-- [React](https://reactjs.org/) - 用户界面库
-- [FFmpeg](https://ffmpeg.org/) - 音视频处理工具
-- [Tailwind CSS](https://tailwindcss.com/) - CSS框架
+本工具仅供个人学习与研究使用。请遵守相关法律法规及哔哩哔哩用户协议，下载内容仅限个人使用，禁止用于商业用途。
 
 ---
 
 <div align="center">
 
-**如果这个项目对您有帮助，请给一个 ⭐ 星标支持！**
+如果 DILIDILI 帮到了你，欢迎点一个 ⭐ 支持一下！
 
 Made with ❤️ by [minorcell](https://github.com/minorcell)
 
