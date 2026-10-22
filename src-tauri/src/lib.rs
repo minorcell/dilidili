@@ -6,6 +6,7 @@ mod storage;
 mod ffmpeg;
 mod export;
 mod settings;
+mod fs_utils;
 
 use auth::*;
 use video::*;

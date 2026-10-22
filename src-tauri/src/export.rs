@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::fs;
 
 // 复制文件到指定文件夹
 #[tauri::command]
@@ -13,14 +12,13 @@ pub async fn export_file_to_folder(
     println!("目标文件夹: {}", target_folder);
     
     let source = Path::new(&source_path);
-    if !source.exists() {
-        return Err(format!("源文件不存在: {}", source_path));
-    }
-    
+    file_metadata(source, "源文件").await?;
+
+    // 使用异步文件系统操作，复制大文件时不会阻塞异步运行时
     let target_dir = Path::new(&target_folder);
-    if !target_dir.exists() {
-        fs::create_dir_all(target_dir).map_err(|e| format!("创建目标目录失败: {}", e))?;
-    }
+    tokio::fs::create_dir_all(target_dir)
+        .await
+        .map_err(|e| format!("创建目标目录失败: {}", e))?;
     
     // 确定目标文件名
     let filename = if let Some(new_name) = new_filename {
@@ -37,8 +35,8 @@ pub async fn export_file_to_folder(
     // 如果目标文件已存在，添加序号
     let mut final_target = target_path.clone();
     let mut counter = 1;
-    
-    while final_target.exists() {
+
+    while tokio::fs::try_exists(&final_target).await.unwrap_or(false) {
         let stem = target_path.file_stem().unwrap_or_default().to_string_lossy();
         let extension = target_path.extension().unwrap_or_default().to_string_lossy();
         
@@ -53,7 +51,9 @@ pub async fn export_file_to_folder(
     }
     
     // 复制文件
-    fs::copy(&source, &final_target).map_err(|e| format!("复制文件失败: {}", e))?;
+    tokio::fs::copy(&source, &final_target)
+        .await
+        .map_err(|e| format!("复制文件失败: {}", e))?;
     
     println!("✅ 文件导出成功: {:?}", final_target);
     Ok(final_target.to_string_lossy().to_string())
@@ -70,9 +70,9 @@ pub async fn batch_export_files(
     println!("目标文件夹: {}", target_folder);
     
     let target_dir = Path::new(&target_folder);
-    if !target_dir.exists() {
-        fs::create_dir_all(target_dir).map_err(|e| format!("创建目标目录失败: {}", e))?;
-    }
+    tokio::fs::create_dir_all(target_dir)
+        .await
+        .map_err(|e| format!("创建目标目录失败: {}", e))?;
     
     let mut exported_files = Vec::new();
     let mut errors = Vec::new();
@@ -102,7 +102,7 @@ pub async fn batch_export_files(
 pub async fn open_folder(folder_path: String) -> Result<(), String> {
     let path = Path::new(&folder_path);
     
-    if !path.exists() {
+    if !tokio::fs::try_exists(path).await.unwrap_or(false) {
         return Err(format!("文件夹不存在: {}", folder_path));
     }
     
@@ -137,12 +137,7 @@ pub async fn open_folder(folder_path: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn get_file_info(file_path: String) -> Result<FileInfo, String> {
     let path = Path::new(&file_path);
-    
-    if !path.exists() {
-        return Err(format!("文件不存在: {}", file_path));
-    }
-    
-    let metadata = fs::metadata(&path).map_err(|e| format!("获取文件信息失败: {}", e))?;
+    let metadata = file_metadata(path, "文件").await?;
     
     let file_info = FileInfo {
         path: file_path.clone(),
@@ -156,6 +151,17 @@ pub async fn get_file_info(file_path: String) -> Result<FileInfo, String> {
     };
     
     Ok(file_info)
+}
+
+// 读取文件元数据：只把 NotFound 报告为“不存在”，其余 I/O 错误保留原始原因
+async fn file_metadata(path: &Path, label: &str) -> Result<std::fs::Metadata, String> {
+    match tokio::fs::metadata(path).await {
+        Ok(metadata) => Ok(metadata),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err(format!("{}不存在: {}", label, path.display()))
+        }
+        Err(e) => Err(format!("无法读取{}信息 {}: {}", label, path.display(), e)),
+    }
 }
 
 // 文件信息结构
