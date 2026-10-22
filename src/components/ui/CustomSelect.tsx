@@ -71,13 +71,13 @@ export default function CustomSelect({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         className={cn(
-          'flex h-8 w-full items-center justify-between gap-2 rounded-md border px-3 text-sm transition-colors',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+          'flex h-11 w-full items-center justify-between gap-2 rounded-xl border px-4 text-sm transition-all',
+          'focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/10',
           disabled
-            ? 'cursor-not-allowed border-line bg-subtle text-subtle-fg opacity-60'
+            ? 'cursor-not-allowed border-transparent bg-subtle text-subtle-fg opacity-60'
             : isOpen
-              ? 'border-accent bg-canvas text-fg ring-2 ring-accent/30'
-              : 'border-line bg-subtle text-fg hover:bg-neutral-subtle',
+              ? 'border-accent bg-canvas text-fg ring-4 ring-accent/10'
+              : 'border-transparent bg-subtle text-fg hover:bg-inset',
         )}
       >
         <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
@@ -104,7 +104,7 @@ export default function CustomSelect({
       {isOpen && (
         <div
           role="listbox"
-          className="fixed z-[9999] animate-menu-in overflow-hidden rounded-md border border-line bg-canvas shadow-lg"
+          className="fixed z-[9999] animate-menu-in overflow-hidden rounded-xl border border-line bg-canvas shadow-pop"
           style={{
             top: rect ? rect.bottom + 4 : 0,
             left: rect ? rect.left : 0,
@@ -123,8 +123,8 @@ export default function CustomSelect({
                   aria-selected={isSelected}
                   onClick={() => handleSelectOption(option)}
                   className={cn(
-                    'flex w-full items-start gap-2 px-3 py-2 text-left transition-colors',
-                    isSelected ? 'bg-subtle' : 'hover:bg-subtle',
+                    'flex w-full items-start gap-2 px-4 py-2.5 text-left transition-colors',
+                    isSelected ? 'bg-accent-subtle/60' : 'hover:bg-subtle',
                   )}
                 >
                   <Check

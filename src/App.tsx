@@ -4,10 +4,8 @@ import {
   ChevronDown,
   Download,
   FlaskConical,
-  FolderOpen,
   LogIn,
   LogOut,
-  MonitorPlay,
   Moon,
   QrCode,
   Settings as SettingsIcon,
@@ -25,67 +23,157 @@ import TestPage from './components/TestPage';
 import UserProfile from './components/UserProfile';
 import Avatar from './components/ui/Avatar';
 import Button from './components/ui/Button';
-import { Card, CardBody, CardHeader, CardTitle } from './components/ui/Card';
+import { Card, CardBody } from './components/ui/Card';
 import Logo from './components/ui/Logo';
 import { MessageProvider } from './components/ui/MessageContext';
 import { useTheme } from './lib/theme';
 import { cn } from './lib/utils';
 import { useAppStore } from './store/appStore';
 
+type Page = 'download' | 'test' | 'settings';
+
 const FEATURES: { icon: LucideIcon; title: string; description: string }[] = [
   {
-    icon: MonitorPlay,
+    icon: Zap,
     title: '最高 4K 清晰度',
     description: '登录后可获取大会员专属的超清视频流。',
   },
   {
-    icon: Zap,
+    icon: Download,
     title: '音视频自动合并',
     description: '内置 FFmpeg，下载完成后自动合并为完整 MP4。',
   },
   {
-    icon: FolderOpen,
-    title: '导出、转码与提取音频',
-    description: '一键导出到指定文件夹，或转换为 AVI/MKV、提取 MP3。',
+    icon: Sparkles,
+    title: '转码与提取音频',
+    description: '一键导出、转换为 AVI/MKV 或提取 MP3。',
   },
   {
     icon: ShieldCheck,
     title: '数据只留在本机',
-    description: 'Cookie 与下载记录均保存在本地，不经过任何第三方服务器。',
+    description: 'Cookie 与下载记录均保存在本地。',
   },
 ];
 
-interface NavTabProps {
+interface SideNavItemProps {
   active: boolean;
   icon: LucideIcon;
   onClick: () => void;
+  badge?: number;
   children: React.ReactNode;
 }
 
-function NavTab({ active, icon: Icon, onClick, children }: NavTabProps) {
+function SideNavItem({ active, icon: Icon, onClick, badge, children }: SideNavItemProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        '-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm transition-colors',
+        'group flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm transition-colors',
         active
-          ? 'border-[#fd8c73] font-semibold text-fg'
-          : 'border-transparent text-muted hover:border-line hover:text-fg',
+          ? 'bg-accent-subtle font-semibold text-accent-fg'
+          : 'text-muted hover:bg-subtle hover:text-fg',
       )}
     >
-      <Icon size={16} aria-hidden="true" />
-      {children}
+      <Icon
+        size={18}
+        aria-hidden="true"
+        className={cn(
+          'shrink-0 transition-colors',
+          active ? 'text-accent-fg' : 'text-subtle-fg group-hover:text-fg',
+        )}
+      />
+      <span className="flex-1 text-left">{children}</span>
+      {badge ? (
+        <span
+          className={cn(
+            'rounded-full px-1.5 py-0.5 text-[11px] font-medium leading-none',
+            active ? 'bg-accent text-white' : 'bg-neutral-subtle text-muted',
+          )}
+        >
+          {badge}
+        </span>
+      ) : null}
     </button>
   );
 }
 
+/** 未登录时的欢迎/登录页 */
+function Welcome({ onLogin }: { onLogin: () => void }) {
+  return (
+    <div className="relative h-full overflow-y-auto">
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,rgba(251,114,153,0.14),transparent_72%)] dark:bg-[radial-gradient(60%_50%_at_50%_0%,rgba(251,114,153,0.1),transparent_72%)]"
+        aria-hidden="true"
+      />
+      <div className="relative mx-auto grid min-h-full w-full max-w-4xl items-center gap-10 px-10 py-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-14">
+        <section>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-subtle px-3 py-1 text-xs font-medium text-accent-fg">
+            <Sparkles size={12} aria-hidden="true" />
+            本地运行 · 无需上传
+          </span>
+          <h1 className="mt-4 text-4xl/[1.18] font-bold tracking-tight text-fg sm:text-[44px]/[1.14]">
+            下载你喜欢的
+            <br />
+            <span className="bg-gradient-to-r from-[#fb7299] via-[#ff85a8] to-[#ffa3c0] bg-clip-text text-transparent">
+              哔哩哔哩视频
+            </span>
+          </h1>
+          <p className="mt-4 max-w-md text-[15px] leading-relaxed text-muted">
+            支持最高 4K 清晰度，自动合并音视频流，并可直接导出、转码或提取音频。
+          </p>
+
+          <ul className="mt-7 grid gap-x-7 gap-y-5 sm:grid-cols-2">
+            {FEATURES.map(({ icon: Icon, title, description }) => (
+              <li key={title} className="flex gap-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-accent-fg">
+                  <Icon size={15} aria-hidden="true" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-fg">{title}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted">{description}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <Card className="rounded-2xl">
+          <CardBody className="space-y-5 p-6">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-accent-subtle text-accent-fg">
+                <QrCode size={20} aria-hidden="true" />
+              </span>
+              <div>
+                <h2 className="text-base font-semibold text-fg">登录账户</h2>
+                <p className="text-xs text-muted">扫码即可开始下载</p>
+              </div>
+            </div>
+            <p className="text-sm leading-relaxed text-muted">
+              使用哔哩哔哩手机 App 扫码登录，以获取高清与大会员清晰度的下载权限。
+            </p>
+            <Button
+              variant="primary"
+              size="lg"
+              className="w-full rounded-full"
+              onClick={onLogin}
+            >
+              <LogIn size={17} aria-hidden="true" />
+              使用二维码登录
+            </Button>
+            <p className="text-center text-xs text-subtle-fg">登录信息仅保存在本机。</p>
+          </CardBody>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 function App() {
-  const { isLoggedIn, userProfile, logout, loadLoginData, loadSettings } = useAppStore();
+  const { isLoggedIn, userProfile, logout, loadLoginData, loadSettings, downloads } = useAppStore();
+  const [page, setPage] = useState<Page>('download');
   const [showLogin, setShowLogin] = useState(false);
-  const [showTestPage, setShowTestPage] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -123,236 +211,151 @@ function App() {
 
   return (
     <MessageProvider>
-      <div className="flex min-h-screen flex-col bg-canvas text-fg">
-        <header className="sticky top-0 z-40 border-b border-header-line bg-header text-header-fg">
-          <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4">
-            <Logo onDark className="h-9 w-9" iconSize={20} />
+      <div className="flex h-screen overflow-hidden bg-subtle text-fg">
+        {/* 侧边栏导航 */}
+        <aside className="flex w-[228px] shrink-0 flex-col border-r border-line bg-canvas">
+          <div className="flex h-16 shrink-0 items-center gap-2.5 px-5">
+            <Logo className="h-9 w-9" iconSize={20} />
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold leading-tight">DILIDILI</p>
-              <p className="truncate text-xs leading-tight text-white/60">哔哩哔哩视频下载器</p>
+              <p className="truncate text-[15px] font-bold leading-tight tracking-tight text-fg">
+                DILIDILI
+              </p>
+              <p className="truncate text-[11px] leading-tight text-muted">哔哩哔哩下载器</p>
             </div>
+          </div>
 
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowSettings(true)}
-                title="设置"
-                aria-label="打开设置"
-                aria-pressed={showSettings}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/15 text-white/75 transition-colors hover:bg-white/10 hover:text-white"
-              >
-                <SettingsIcon size={16} aria-hidden="true" />
-              </button>
+          <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-3" aria-label="主导航">
+            <SideNavItem
+              active={page === 'download'}
+              icon={Download}
+              onClick={() => setPage('download')}
+              badge={downloads.length || undefined}
+            >
+              下载
+            </SideNavItem>
+            <SideNavItem
+              active={page === 'test'}
+              icon={FlaskConical}
+              onClick={() => setPage('test')}
+            >
+              测试
+            </SideNavItem>
+            <SideNavItem
+              active={page === 'settings'}
+              icon={SettingsIcon}
+              onClick={() => setPage('settings')}
+            >
+              设置
+            </SideNavItem>
+          </nav>
 
-              <button
-                type="button"
-                onClick={toggleTheme}
-                title={isDark ? '切换到浅色模式' : '切换到深色模式'}
-                aria-label={isDark ? '切换到浅色模式' : '切换到深色模式'}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/15 text-white/75 transition-colors hover:bg-white/10 hover:text-white"
-              >
-                {isDark ? (
-                  <Sun size={16} aria-hidden="true" />
-                ) : (
-                  <Moon size={16} aria-hidden="true" />
-                )}
-              </button>
+          <div className="shrink-0 space-y-1 border-t border-line-muted p-3">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={isDark ? '切换到浅色模式' : '切换到深色模式'}
+              aria-label={isDark ? '切换到浅色模式' : '切换到深色模式'}
+              className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm text-muted transition-colors hover:bg-subtle hover:text-fg"
+            >
+              {isDark ? (
+                <Sun size={18} className="shrink-0 text-subtle-fg" aria-hidden="true" />
+              ) : (
+                <Moon size={18} className="shrink-0 text-subtle-fg" aria-hidden="true" />
+              )}
+              {isDark ? '浅色模式' : '深色模式'}
+            </button>
 
-              {isLoggedIn ? (
-                <div className="relative" ref={userMenuRef}>
-                  <button
-                    type="button"
-                    onClick={() => setShowUserMenu((open) => !open)}
-                    aria-haspopup="menu"
-                    aria-expanded={showUserMenu}
-                    className="flex items-center gap-2 rounded-md px-1.5 py-1 text-header-fg transition-colors hover:bg-white/10"
-                  >
-                    <Avatar
-                      src={userProfile?.avatar}
-                      name={userProfile?.name}
-                      className="h-6 w-6 border-white/20 bg-white/10 text-white/70"
-                      iconSize={14}
-                    />
-                    <span className="hidden max-w-32 truncate text-sm sm:block">
+            {isLoggedIn ? (
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowUserMenu((open) => !open)}
+                  aria-haspopup="menu"
+                  aria-expanded={showUserMenu}
+                  className="flex w-full items-center gap-2.5 rounded-xl p-2 transition-colors hover:bg-subtle"
+                >
+                  <Avatar
+                    src={userProfile?.avatar}
+                    name={userProfile?.name}
+                    className="h-8 w-8 border-transparent"
+                    iconSize={15}
+                  />
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block truncate text-sm font-medium text-fg">
                       {userProfile?.name || '用户'}
                     </span>
-                    <ChevronDown
-                      size={14}
-                      aria-hidden="true"
-                      className={cn(
-                        'text-white/60 transition-transform',
-                        showUserMenu && 'rotate-180',
-                      )}
-                    />
-                  </button>
+                    <span className="block truncate font-mono text-[11px] text-muted">
+                      UID {userProfile?.mid ?? '未知'}
+                    </span>
+                  </span>
+                  <ChevronDown
+                    size={14}
+                    aria-hidden="true"
+                    className={cn(
+                      'shrink-0 text-muted transition-transform',
+                      showUserMenu && 'rotate-180',
+                    )}
+                  />
+                </button>
 
-                  {showUserMenu && (
-                    <div
-                      role="menu"
-                      className="absolute right-0 z-50 mt-2 w-60 animate-menu-in overflow-hidden rounded-md border border-line bg-canvas text-fg shadow-lg"
+                {showUserMenu && (
+                  <div
+                    role="menu"
+                    className="absolute bottom-full left-0 right-0 z-50 mb-2 animate-menu-in overflow-hidden rounded-xl border border-line bg-canvas text-fg shadow-pop"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        setShowUserProfile(true);
+                      }}
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm transition-colors hover:bg-subtle"
                     >
-                      <div className="flex items-center gap-3 border-b border-line bg-subtle px-3 py-3">
-                        <Avatar
-                          src={userProfile?.avatar}
-                          name={userProfile?.name}
-                          className="h-8 w-8"
-                        />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">
-                            {userProfile?.name || '用户'}
-                          </p>
-                          <p className="truncate font-mono text-xs text-muted">
-                            UID {userProfile?.mid ?? '未知'}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="py-1">
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            setShowUserMenu(false);
-                            setShowUserProfile(true);
-                          }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-subtle"
-                        >
-                          <UserRound size={16} className="text-muted" aria-hidden="true" />
-                          个人信息
-                        </button>
-                      </div>
-
-                      <div className="border-t border-line py-1">
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            setShowUserMenu(false);
-                            logout();
-                          }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-danger-fg transition-colors hover:bg-danger-subtle"
-                        >
-                          <LogOut size={16} aria-hidden="true" />
-                          退出登录
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <Button
-                  variant="ghost"
-                  className="border-white/25 text-header-fg hover:border-white/40 hover:bg-white/10 hover:text-white"
-                  onClick={() => setShowLogin(true)}
-                >
-                  <LogIn size={16} aria-hidden="true" />
-                  登录
-                </Button>
-              )}
-            </div>
+                      <UserRound size={16} className="text-muted" aria-hidden="true" />
+                      个人信息
+                    </button>
+                    <div className="border-t border-line-muted" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        logout();
+                      }}
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-danger-fg transition-colors hover:bg-danger-subtle"
+                    >
+                      <LogOut size={16} aria-hidden="true" />
+                      退出登录
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Button
+                variant="primary"
+                className="w-full rounded-full"
+                onClick={() => setShowLogin(true)}
+              >
+                <LogIn size={16} aria-hidden="true" />
+                登录
+              </Button>
+            )}
           </div>
-        </header>
+        </aside>
 
-        {isLoggedIn && (
-          <nav className="border-b border-line bg-canvas" aria-label="主导航">
-            <div className="mx-auto flex w-full max-w-6xl items-center gap-1 px-4">
-              <NavTab
-                active={!showTestPage && !showSettings}
-                icon={Download}
-                onClick={() => {
-                  setShowSettings(false);
-                  setShowTestPage(false);
-                }}
-              >
-                下载
-              </NavTab>
-              <NavTab
-                active={showTestPage && !showSettings}
-                icon={FlaskConical}
-                onClick={() => {
-                  setShowSettings(false);
-                  setShowTestPage(true);
-                }}
-              >
-                测试
-              </NavTab>
-            </div>
-          </nav>
-        )}
-
-        <main className="flex-1">
-          {showSettings ? (
-            <SettingsPage onBack={() => setShowSettings(false)} />
-          ) : showTestPage ? (
+        {/* 内容区：独立滚动 */}
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          {page === 'settings' ? (
+            <SettingsPage onBack={() => setPage('download')} />
+          ) : page === 'test' ? (
             <TestPage />
           ) : isLoggedIn ? (
-            <Downloader onOpenSettings={() => setShowSettings(true)} />
+            <Downloader onOpenSettings={() => setPage('settings')} />
           ) : (
-            <div className="mx-auto grid w-full max-w-5xl gap-10 px-4 py-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:gap-16 lg:py-20">
-              <section>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-subtle px-2.5 py-1 text-xs text-muted">
-                  <Sparkles size={12} className="text-accent-fg" aria-hidden="true" />
-                  本地运行 · 无需上传
-                </span>
-                <h1 className="mt-4 text-4xl/[1.2] font-semibold tracking-tight text-fg sm:text-5xl/[1.15]">
-                  下载你喜欢的
-                  <br className="hidden sm:block" />
-                  哔哩哔哩视频
-                </h1>
-                <p className="mt-4 max-w-md text-base text-muted">
-                  支持最高 4K 清晰度，自动合并音视频流，并可直接导出、转码或提取音频。
-                </p>
-
-                <ul className="mt-8 space-y-4">
-                  {FEATURES.map(({ icon: Icon, title, description }) => (
-                    <li key={title} className="flex gap-3">
-                      <Icon
-                        size={16}
-                        className="mt-0.5 shrink-0 text-accent-fg"
-                        aria-hidden="true"
-                      />
-                      <div>
-                        <p className="text-sm font-semibold text-fg">{title}</p>
-                        <p className="text-sm text-muted">{description}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>
-                    <QrCode size={16} aria-hidden="true" />
-                    登录账户
-                  </CardTitle>
-                </CardHeader>
-                <CardBody className="space-y-4">
-                  <p className="text-sm text-muted">
-                    使用哔哩哔哩手机 App 扫码登录，以获取高清与大会员清晰度的下载权限。
-                  </p>
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    className="w-full"
-                    onClick={() => setShowLogin(true)}
-                  >
-                    <LogIn size={16} aria-hidden="true" />
-                    使用二维码登录
-                  </Button>
-                  <p className="text-center text-xs text-subtle-fg">登录信息仅保存在本机。</p>
-                </CardBody>
-              </Card>
-            </div>
+            <Welcome onLogin={() => setShowLogin(true)} />
           )}
         </main>
-
-        <footer className="border-t border-line py-6">
-          <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-4 text-xs text-subtle-fg">
-            <span>DILIDILI · 哔哩哔哩视频下载器</span>
-            <span>MIT License</span>
-          </div>
-        </footer>
 
         {showLogin && <Login onClose={() => setShowLogin(false)} />}
 

@@ -13,9 +13,12 @@ interface AvatarProps {
 export default function Avatar({ src, name, className, iconSize = 16 }: AvatarProps) {
   const [failed, setFailed] = useState(false);
 
+  // B 站图床使用 http 协议返回，统一升级为 https
+  const imageSrc = src?.replace(/^http:\/\//i, 'https://');
+
   useEffect(() => {
     setFailed(false);
-  }, [src]);
+  }, [imageSrc]);
 
   return (
     <span
@@ -25,11 +28,14 @@ export default function Avatar({ src, name, className, iconSize = 16 }: AvatarPr
       )}
       aria-label={name ? `${name} 的头像` : '用户头像'}
     >
-      {src && !failed ? (
+      {imageSrc && !failed ? (
         <img
-          src={src}
+          src={imageSrc}
           alt={name ? `${name} 的头像` : '用户头像'}
           className="h-full w-full object-cover"
+          // B 站图床会校验 Referer，置空才能正常加载
+          referrerPolicy="no-referrer"
+          loading="lazy"
           onError={() => setFailed(true)}
         />
       ) : (

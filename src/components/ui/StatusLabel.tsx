@@ -10,23 +10,23 @@ const STATUS_MAP: Record<
 > = {
   pending: {
     label: '等待中',
-    className: 'border-line bg-subtle text-muted',
+    className: 'bg-neutral-subtle text-muted',
     icon: CircleDashed,
   },
   downloading: {
     label: '下载中',
-    className: 'border-accent/40 bg-accent-subtle text-accent-fg',
+    className: 'bg-accent-subtle text-accent-fg',
     icon: Loader2,
     spin: true,
   },
   completed: {
     label: '已完成',
-    className: 'border-success/40 bg-success-subtle text-success-fg',
+    className: 'bg-success-subtle text-success-fg',
     icon: CheckCircle2,
   },
   failed: {
     label: '失败',
-    className: 'border-danger/40 bg-danger-subtle text-danger-fg',
+    className: 'bg-danger-subtle text-danger-fg',
     icon: XCircle,
   },
 };
@@ -38,7 +38,7 @@ interface StatusLabelProps {
   showIcon?: boolean;
 }
 
-/** GitHub Label 风格的状态徽章 */
+/** 状态徽章：柔和底色胶囊 */
 export default function StatusLabel({ status, className, showIcon = true }: StatusLabelProps) {
   const config = STATUS_MAP[status];
   const Icon = config.icon;
@@ -46,7 +46,7 @@ export default function StatusLabel({ status, className, showIcon = true }: Stat
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium',
+        'inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium leading-none',
         config.className,
         className,
       )}

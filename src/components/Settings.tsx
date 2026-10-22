@@ -63,42 +63,50 @@ export default function Settings({ onBack }: SettingsProps) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-8">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-fg">设置</h1>
-          <p className="mt-1 text-sm text-muted">配置下载文件的保存位置。</p>
+    <div className="custom-scrollbar h-full overflow-y-auto">
+      <div className="mx-auto w-full max-w-3xl space-y-5 p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-fg">设置</h1>
+            <p className="mt-0.5 text-xs text-muted">配置下载文件的保存位置。</p>
+          </div>
+          <Button size="sm" className="rounded-full" onClick={onBack}>
+            <ArrowLeft size={14} aria-hidden="true" />
+            返回
+          </Button>
         </div>
-        <Button size="sm" onClick={onBack}>
-          <ArrowLeft size={14} aria-hidden="true" />
-          返回
-        </Button>
-      </div>
 
       <Card>
         <CardHeader>
           <CardTitle>
-            <FolderOpen size={16} aria-hidden="true" />
+            <FolderOpen size={16} className="text-accent-fg" aria-hidden="true" />
             下载位置
           </CardTitle>
           {isDownloadDirDefault && (
-            <span className="rounded-full border border-line bg-canvas px-2 py-0.5 text-xs text-muted">
-              默认
-            </span>
+            <span className="rounded-full bg-subtle px-2.5 py-0.5 text-xs text-muted">默认</span>
           )}
         </CardHeader>
         <CardBody className="space-y-4">
-          <div className="rounded-md border border-line bg-subtle px-3 py-2">
+          <div className="rounded-xl bg-subtle px-4 py-3">
             <p className="text-xs text-muted">当前下载目录</p>
             <p className="mt-1 break-all font-mono text-sm text-fg">{downloadDir || '正在加载…'}</p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="primary" onClick={pickDownloadDir} disabled={isPicking}>
+            <Button
+              variant="primary"
+              className="rounded-full"
+              onClick={pickDownloadDir}
+              disabled={isPicking}
+            >
               <FolderOpen size={14} aria-hidden="true" />
               {isPicking ? '选择中…' : '选择文件夹'}
             </Button>
-            <Button onClick={resetDownloadDir} disabled={isDownloadDirDefault || isResetting}>
+            <Button
+              className="rounded-full"
+              onClick={resetDownloadDir}
+              disabled={isDownloadDirDefault || isResetting}
+            >
               <RotateCcw size={14} aria-hidden="true" />
               恢复默认
             </Button>
@@ -109,6 +117,7 @@ export default function Settings({ onBack }: SettingsProps) {
           </p>
         </CardBody>
       </Card>
+      </div>
     </div>
   );
 }

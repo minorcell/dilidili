@@ -179,16 +179,16 @@ export default function Login({ onClose }: LoginProps) {
 
   const statusTone =
     loginStatus === 'success'
-      ? 'border-success/40 bg-success-subtle text-success-fg'
+      ? 'bg-success-subtle text-success-fg'
       : loginStatus === 'error'
-        ? 'border-danger/40 bg-danger-subtle text-danger-fg'
+        ? 'bg-danger-subtle text-danger-fg'
         : loginStatus === 'polling' || loginStatus === 'loading'
-          ? 'border-accent/40 bg-accent-subtle text-accent-fg'
-          : 'border-line bg-subtle text-muted';
+          ? 'bg-accent-subtle text-accent-fg'
+          : 'bg-subtle text-muted';
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-overlay-in"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-overlay-in"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose?.();
@@ -199,28 +199,28 @@ export default function Login({ onClose }: LoginProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="login-dialog-title"
-        className="w-full max-w-sm animate-dialog-in overflow-hidden rounded-lg border border-line bg-canvas shadow-xl"
+        className="w-full max-w-sm animate-dialog-in overflow-hidden rounded-2xl border border-line bg-canvas shadow-pop"
       >
-        <div className="flex items-center justify-between border-b border-line bg-subtle px-4 py-3">
-          <h2 id="login-dialog-title" className="text-sm font-semibold text-fg">
+        <div className="flex items-center justify-between border-b border-line-muted px-5 py-4">
+          <h2 id="login-dialog-title" className="text-base font-semibold text-fg">
             登录账户
           </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="关闭登录窗口"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-neutral-subtle hover:text-fg"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-subtle hover:text-fg"
           >
             <X size={16} aria-hidden="true" />
           </button>
         </div>
 
-        <div className="space-y-4 p-4">
+        <div className="space-y-4 p-5">
           <p className="text-sm text-muted">使用哔哩哔哩手机 App 扫描二维码完成登录。</p>
 
           {/* 二维码区域 */}
           <div className="flex justify-center">
-            <div className="flex h-[212px] w-[212px] items-center justify-center rounded-md border border-line bg-canvas p-3">
+            <div className="flex h-[212px] w-[212px] items-center justify-center rounded-2xl border border-line-muted bg-white p-3">
               {qrData ? (
                 <QRCodeSVG
                   value={qrData.url}
@@ -246,7 +246,7 @@ export default function Login({ onClose }: LoginProps) {
           {/* 状态信息 */}
           <div
             className={cn(
-              'flex items-start gap-2 rounded-md border px-3 py-2 text-xs leading-relaxed',
+              'flex items-start gap-2 rounded-xl px-3.5 py-2.5 text-xs leading-relaxed',
               statusTone,
             )}
             role="status"
@@ -261,7 +261,7 @@ export default function Login({ onClose }: LoginProps) {
             <Button
               variant="primary"
               size="lg"
-              className="w-full"
+              className="w-full rounded-full"
               onClick={refreshQrCode}
               disabled={!isTauriAvailable()}
             >
@@ -274,7 +274,7 @@ export default function Login({ onClose }: LoginProps) {
             <Button
               variant="default"
               size="lg"
-              className="w-full"
+              className="w-full rounded-full"
               onClick={refreshQrCode}
               disabled={!isTauriAvailable()}
             >
@@ -284,14 +284,14 @@ export default function Login({ onClose }: LoginProps) {
           )}
 
           {loginStatus === 'success' && (
-            <div className="flex items-center justify-center gap-2 rounded-md border border-success/40 bg-success-subtle px-3 py-2 text-sm font-medium text-success-fg">
+            <div className="flex items-center justify-center gap-2 rounded-xl bg-success-subtle px-3 py-2.5 text-sm font-medium text-success-fg">
               <CheckCircle2 size={16} aria-hidden="true" />
               登录成功，正在初始化...
             </div>
           )}
 
           {!isTauriAvailable() && (
-            <div className="flex items-start gap-2 rounded-md border border-attention/40 bg-attention-subtle px-3 py-2 text-xs text-attention-fg">
+            <div className="flex items-start gap-2 rounded-xl bg-attention-subtle px-3.5 py-2.5 text-xs text-attention-fg">
               <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
               <span>
                 当前在浏览器环境中运行，登录需要桌面应用支持。请运行{' '}

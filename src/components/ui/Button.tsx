@@ -5,29 +5,30 @@ import { cn } from '../../lib/utils';
 
 const buttonVariants = cva(
   [
-    'inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md border',
-    'text-sm font-medium transition-colors',
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-    'disabled:pointer-events-none disabled:opacity-60',
+    'inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border',
+    'font-medium transition-all duration-200 active:scale-[0.98]',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30',
+    'disabled:pointer-events-none disabled:opacity-50',
   ],
   {
     variants: {
       variant: {
-        // GitHub 默认按钮：浅灰底 + 边框
-        default: 'border-line bg-subtle text-fg hover:bg-neutral-subtle',
-        // GitHub 主按钮：绿色
-        primary: 'border-transparent bg-success text-white hover:bg-success/90',
-        // 白底按钮
-        outline: 'border-line bg-canvas text-fg hover:bg-subtle',
+        // 次要按钮：白底细边框
+        default: 'border-line bg-canvas text-fg hover:border-accent/40 hover:bg-accent-subtle hover:text-accent-fg',
+        // 主按钮：品牌粉
+        primary:
+          'border-transparent bg-accent text-white shadow-[0_2px_10px_rgba(251,114,153,0.35)] hover:bg-[#fc8bab] hover:shadow-[0_4px_14px_rgba(251,114,153,0.45)]',
+        // 描边按钮
+        outline: 'border-line bg-transparent text-fg hover:bg-subtle',
         ghost: 'border-transparent bg-transparent text-muted hover:bg-neutral-subtle hover:text-fg',
         danger:
-          'border-line bg-subtle text-danger-fg hover:border-danger hover:bg-danger hover:text-white',
+          'border-transparent bg-danger-subtle text-danger-fg hover:bg-danger hover:text-white',
       },
       size: {
-        sm: 'h-7 px-2.5 text-xs',
-        md: 'h-8 px-3',
-        lg: 'h-9 px-4',
-        icon: 'h-7 w-7',
+        sm: 'h-8 px-3 text-xs',
+        md: 'h-9 px-4',
+        lg: 'h-11 px-6 text-[15px]',
+        icon: 'h-8 w-8',
       },
     },
     defaultVariants: {
