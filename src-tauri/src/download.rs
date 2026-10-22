@@ -1,11 +1,35 @@
 use crate::fs_utils::{replace_file, temp_suffix, TempFileGuard, TempFileSet};
 use crate::types::*;
+use std::collections::HashMap;
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::Emitter;
 use tokio::io::AsyncWriteExt;
+
+// 正在下载的任务 ID 到取消标记的映射
+pub type DownloadCancellations = Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>;
+
+// 任务结束时从注册表移除，避免长期占用内存
+struct CancelGuard {
+    registry: DownloadCancellations,
+    download_id: String,
+}
+
+impl Drop for CancelGuard {
+    fn drop(&mut self) {
+        if let Ok(mut registry) = self.registry.lock() {
+            registry.remove(&self.download_id);
+        }
+    }
+}
+
+fn is_cancelled(cancel: &Option<Arc<AtomicBool>>) -> bool {
+    cancel
+        .as_ref()
+        .is_some_and(|flag| flag.load(Ordering::Relaxed))
+}
 
 // 用户代理
 const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36";
@@ -19,6 +43,8 @@ const WRITE_BUFFER_SIZE: usize = 256 * 1024;
 struct DownloadProgressPayload {
     download_id: String,
     progress: f64,
+    downloaded: u64,
+    total: u64,
 }
 
 // 视频流与音频流并发下载，两者共享同一个进度统计：
@@ -63,8 +89,10 @@ impl ProgressReporter {
             return;
         }
 
+        let downloaded = self.downloaded.load(Ordering::Relaxed);
+
         // 保留最后的 1%，等 ffmpeg 合并完成后再由前端置为 100%
-        let percent = ((self.downloaded.load(Ordering::Relaxed) * 100 / total).min(99)) as u8;
+        let percent = ((downloaded * 100 / total).min(99)) as u8;
         if percent == 0 {
             return;
         }
@@ -81,6 +109,8 @@ impl ProgressReporter {
                 DownloadProgressPayload {
                     download_id: self.download_id.clone(),
                     progress: percent as f64,
+                    downloaded,
+                    total,
                 },
             );
         }
@@ -148,7 +178,12 @@ async fn download_stream_to_file(
     path: &Path,
     label: &str,
     reporter: Option<Arc<ProgressReporter>>,
+    cancel: Option<Arc<AtomicBool>>,
 ) -> Result<u64, String> {
+    if is_cancelled(&cancel) {
+        return Err(format!("{}下载已取消", label));
+    }
+
     println!("=== 开始下载{} ===", label);
     println!("{}URL: {}", label, url);
     println!("保存到: {:?}", path);
@@ -186,6 +221,10 @@ async fn download_stream_to_file(
     let mut downloaded: u64 = 0;
 
     loop {
+        if is_cancelled(&cancel) {
+            return Err(format!("{}下载已取消", label));
+        }
+
         match response.chunk().await {
             Ok(Some(chunk)) => {
                 writer
@@ -222,15 +261,29 @@ async fn download_stream_to_file(
 #[tauri::command]
 pub async fn download_video(
     app_handle: tauri::AppHandle,
+    state: tauri::State<'_, DownloadCancellations>,
     video_data: VideoData,
     video_stream: VideoStream,
     audio_stream: AudioStream,
     cookies: String,
     download_id: Option<String>,
-) -> Result<String, String> {
+) -> Result<DownloadResult, String> {
     println!("=== 开始下载视频 ===");
     println!("视频标题: {}", video_data.title);
     println!("视频质量: {}", video_stream.description);
+
+    // 注册取消标记，任务结束（成功、失败或取消）时由 guard 清理
+    let cancel_flag = download_id.as_ref().map(|id| {
+        let flag = Arc::new(AtomicBool::new(false));
+        if let Ok(mut registry) = state.lock() {
+            registry.insert(id.clone(), flag.clone());
+        }
+        flag
+    });
+    let _cancel_guard = download_id.as_ref().map(|id| CancelGuard {
+        registry: state.inner().clone(),
+        download_id: id.clone(),
+    });
 
     // 创建下载目录：优先使用设置页保存的目录，默认使用系统下载目录
     let downloads_dir = crate::settings::resolve_download_dir(&app_handle)?;
@@ -308,6 +361,7 @@ pub async fn download_video(
         &video_temp,
         "视频流",
         reporter.clone(),
+        cancel_flag.clone(),
     ));
 
     let mut audio_fut = match audio_url {
@@ -319,6 +373,7 @@ pub async fn download_video(
             &audio_temp,
             "音频流",
             reporter.clone(),
+            cancel_flag.clone(),
         ))),
         None => {
             println!("⚠️ 音频流URL为空，跳过音频下载");
@@ -386,12 +441,15 @@ pub async fn download_video(
 
     if !audio_downloaded {
         replace_file(&video_temp, &final_path).await?;
-        let message = if audio_result.is_some() {
-            "视频下载完成（音频下载失败，已保存仅视频）"
+        if audio_result.is_some() {
+            println!("⚠️ 音频下载失败，已保存仅视频");
         } else {
-            "视频下载完成（无音频流）"
-        };
-        return Ok(format!("{}: {:?}", message, final_path));
+            println!("⚠️ 没有音频流，已保存仅视频");
+        }
+        return Ok(DownloadResult {
+            file_path: final_path.to_string_lossy().to_string(),
+            has_audio: false,
+        });
     }
 
     println!("视频和音频都存在，开始FFmpeg合并");
@@ -407,13 +465,32 @@ pub async fn download_video(
     {
         Ok(_) => {
             println!("✅ FFmpeg合并成功");
-            Ok(format!("视频下载并合并完成: {:?}", final_path))
+            Ok(DownloadResult {
+                file_path: final_path.to_string_lossy().to_string(),
+                has_audio: true,
+            })
         }
         Err(e) => {
             println!("⚠️ FFmpeg合并失败: {}，保留视频流", e);
             // 合并失败，保留完整的视频流
             replace_file(&video_temp, &final_path).await?;
-            Ok(format!("视频下载完成（合并失败，仅视频）: {:?}", final_path))
+            Ok(DownloadResult {
+                file_path: final_path.to_string_lossy().to_string(),
+                has_audio: false,
+            })
         }
     }
+}
+
+// 取消正在进行的下载：设置标记后，下载循环会在下一个数据块处退出并清理临时文件
+#[tauri::command]
+pub fn cancel_download(
+    state: tauri::State<'_, DownloadCancellations>,
+    download_id: String,
+) -> Result<(), String> {
+    let registry = state.lock().map_err(|e| e.to_string())?;
+    if let Some(flag) = registry.get(&download_id) {
+        flag.store(true, Ordering::Relaxed);
+    }
+    Ok(())
 }

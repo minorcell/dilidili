@@ -9,6 +9,12 @@ interface SelectOption {
   filesize?: number;
 }
 
+function formatSize(bytes?: number): string | undefined {
+  if (!bytes || bytes <= 0) return undefined;
+  const megabytes = bytes / 1024 / 1024;
+  return megabytes >= 1024 ? `${(megabytes / 1024).toFixed(1)} GB` : `${megabytes.toFixed(1)} MB`;
+}
+
 interface CustomSelectProps {
   options: SelectOption[];
   value?: string | number;
@@ -86,7 +92,7 @@ export default function CustomSelect({
               <span className="truncate font-medium">{selectedOption.label}</span>
               {selectedOption.filesize ? (
                 <span className="shrink-0 text-xs text-muted">
-                  {(selectedOption.filesize / 1024 / 1024).toFixed(1)} MB
+                  约 {formatSize(selectedOption.filesize)}
                 </span>
               ) : null}
             </>
@@ -139,9 +145,7 @@ export default function CustomSelect({
                     <span className="flex flex-wrap items-center gap-x-2">
                       <span className="truncate text-sm font-medium text-fg">{option.label}</span>
                       {option.filesize ? (
-                        <span className="text-xs text-muted">
-                          {(option.filesize / 1024 / 1024).toFixed(1)} MB
-                        </span>
+                        <span className="text-xs text-muted">约 {formatSize(option.filesize)}</span>
                       ) : null}
                     </span>
                     {option.description && (

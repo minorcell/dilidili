@@ -14,6 +14,7 @@ import { useAppStore } from '../store/appStore';
 import { QrCodeData, LoginSuccessData, LoginStatus, UserProfile } from '../types/bilibili';
 import { cn } from '../lib/utils';
 import { isTauriAvailable } from '../lib/tauri';
+import { userMessage } from '../lib/errors';
 import Button from './ui/Button';
 
 interface QrLoginPanelProps {
@@ -37,7 +38,7 @@ export default function QrLoginPanel({ className, onSuccess }: QrLoginPanelProps
   useEffect(() => {
     if (!isTauriAvailable()) {
       setLoginStatus('error');
-      setStatusMessage('请在 Tauri 桌面应用中使用登录功能');
+      setStatusMessage('登录功能需要在 DiliDili 桌面应用中使用。');
     } else {
       getQrCode();
     }
@@ -56,13 +57,13 @@ export default function QrLoginPanel({ className, onSuccess }: QrLoginPanelProps
   const getQrCode = async () => {
     if (!isTauriAvailable()) {
       setLoginStatus('error');
-      setStatusMessage('Tauri 环境不可用，请运行 pnpm tauri dev');
+      setStatusMessage('登录功能暂时不可用，请重启应用后再试。');
       return;
     }
 
     try {
       setLoginStatus('loading');
-      setStatusMessage('正在获取登录二维码...');
+      setStatusMessage('正在获取登录二维码…');
 
       const qrCodeData: QrCodeData = await invoke('get_login_qr_code');
 
@@ -73,7 +74,7 @@ export default function QrLoginPanel({ className, onSuccess }: QrLoginPanelProps
       startPolling(qrCodeData.qrcode_key);
     } catch (qrError) {
       setLoginStatus('error');
-      setStatusMessage(`获取二维码失败：${qrError}`);
+      setStatusMessage(userMessage(qrError, '二维码获取失败，请稍后重试。'));
     }
   };
 
@@ -118,7 +119,7 @@ export default function QrLoginPanel({ className, onSuccess }: QrLoginPanelProps
             clearInterval(interval);
             break;
           default:
-            setStatusMessage(`状态：${result.poll_data.message}`);
+            setStatusMessage('登录状态异常，请刷新二维码后重试。');
             break;
         }
       } catch {
@@ -243,11 +244,7 @@ export default function QrLoginPanel({ className, onSuccess }: QrLoginPanelProps
       {!isTauriAvailable() && (
         <div className="flex items-start gap-2 rounded-xl bg-attention-subtle px-3.5 py-2.5 text-xs text-attention-fg">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-          <span>
-            当前在浏览器环境中运行，登录需要桌面应用支持。请运行{' '}
-            <code className="rounded bg-attention/10 px-1 py-0.5 font-mono">pnpm tauri dev</code>{' '}
-            启动桌面应用。
-          </span>
+          <span>登录功能需要在 DiliDili 桌面应用中使用。</span>
         </div>
       )}
     </div>

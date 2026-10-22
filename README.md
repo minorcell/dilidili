@@ -5,7 +5,7 @@
 DILIDILI 是一款免费、开源的哔哩哔哩视频下载工具，支持 Windows、macOS 和 Linux。
 粘贴链接、选好画质，剩下的交给它。
 
-[⬇️ 下载最新版本](https://github.com/minorcell/dilidili/releases/latest) · [🌐 访问官网](https://dilidili.mcell.top) · [💬 反馈问题](https://github.com/minorcell/dilidili/issues)
+[⬇️ 下载最新版本](https://github.com/minorcell/dilidili/releases/latest) · [🌐 访问官网](https://minorcell.github.io/dilidili/) · [💬 反馈问题](https://github.com/minorcell/dilidili/issues)
 
 ## ✨ 为什么用它
 
@@ -23,7 +23,11 @@ DILIDILI 是一款免费、开源的哔哩哔哩视频下载工具，支持 Wind
 ### macOS(Homebrew)
 
 ```bash
-brew tap minorcell/tap
+brew tap minorcell/dilidili-homebrew https://github.com/minorcell/dilidili-homebrew
+```
+
+```bash
+brew trust minorcell/dilidili-homebrew
 ```
 
 ```bash
@@ -106,9 +110,9 @@ pnpm lint        # 代码检查
 1. 校验 tag 与 `src-tauri/Cargo.toml` 中的版本一致
 2. 下载 FFmpeg、构建 DMG，并上传到该 Release
 3. 更新 `Casks/dilidili.rb` 的版本号与 SHA256，并提交到 `main`
-4. 如果配置了 `HOMEBREW_TAP_TOKEN`，同时把 Cask 同步到 `minorcell/homebrew-tap`
+4. 如果配置了 `HOMEBREW_TAP_TOKEN`，同时把 Cask 同步到 `minorcell/dilidili-homebrew`
 
-`brew tap minorcell/tap` 依赖一个名为 `homebrew-tap` 的仓库（`minorcell/homebrew-tap`），仓库内放置 `Casks/dilidili.rb`。在 `minorcell/dilidili` 的仓库设置里添加可写该仓库的 PAT 作为 secret `HOMEBREW_TAP_TOKEN`，即可自动同步。
+Cask 文件维护在主仓库的 `Casks/dilidili.rb`，并同步到 [minorcell/dilidili-homebrew](https://github.com/minorcell/dilidili-homebrew)。由于仓库名不是 Homebrew 默认的 `homebrew-*` 形式，用户需要通过完整地址添加 tap，并使用 `brew trust` 信任该第三方 tap。
 
 需要手动更新 Cask 时：
 
