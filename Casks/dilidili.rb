@@ -1,5 +1,5 @@
 cask "dilidili" do
-  version "0.5.0"
+  version "0.6.0"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
 
   url "https://github.com/minorcell/dilidili/releases/download/v#{version}/DILIDILI-#{version}.dmg"
