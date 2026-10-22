@@ -1,34 +1,24 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
-  ChevronDown,
   Download,
   FlaskConical,
-  LogIn,
-  LogOut,
-  Moon,
   QrCode,
-  Settings as SettingsIcon,
   ShieldCheck,
   Sparkles,
-  Sun,
   UserRound,
   Zap,
 } from 'lucide-react';
 import './App.css';
 import Downloader from './components/Downloader';
-import Login from './components/Login';
+import QrLoginPanel from './components/QrLoginPanel';
 import SettingsPage from './components/Settings';
 import TestPage from './components/TestPage';
-import UserProfile from './components/UserProfile';
-import Avatar from './components/ui/Avatar';
-import Button from './components/ui/Button';
 import { Card, CardBody } from './components/ui/Card';
-import Logo from './components/ui/Logo';
 import { MessageProvider } from './components/ui/MessageContext';
-import { useTheme } from './lib/theme';
-import { cn } from './lib/utils';
 import { hasOverlayTitleBar } from './lib/platform';
+import { useSystemTheme } from './lib/theme';
+import { cn } from './lib/utils';
 import { useAppStore } from './store/appStore';
 
 type Page = 'download' | 'test' | 'settings';
@@ -74,7 +64,7 @@ function SideNavItem({ active, icon: Icon, onClick, badge, children }: SideNavIt
         'group flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm transition-colors',
         active
           ? 'bg-accent-subtle font-semibold text-accent-fg'
-          : 'text-muted hover:bg-subtle hover:text-fg',
+          : 'text-muted hover:bg-inset hover:text-fg',
       )}
     >
       <Icon
@@ -101,7 +91,7 @@ function SideNavItem({ active, icon: Icon, onClick, badge, children }: SideNavIt
 }
 
 /** 未登录时的欢迎/登录页 */
-function Welcome({ onLogin }: { onLogin: () => void }) {
+function Welcome() {
   return (
     <div className="relative h-full overflow-y-auto">
       <div
@@ -143,28 +133,17 @@ function Welcome({ onLogin }: { onLogin: () => void }) {
         </section>
 
         <Card className="rounded-2xl">
-          <CardBody className="space-y-5 p-6">
+          <CardBody className="space-y-4 p-6">
             <div className="flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-full bg-accent-subtle text-accent-fg">
                 <QrCode size={20} aria-hidden="true" />
               </span>
               <div>
-                <h2 className="text-base font-semibold text-fg">登录账户</h2>
-                <p className="text-xs text-muted">扫码即可开始下载</p>
+                <h2 className="text-base font-semibold text-fg">扫码登录</h2>
+                <p className="text-xs text-muted">使用哔哩哔哩手机 App 扫码即可开始下载</p>
               </div>
             </div>
-            <p className="text-sm leading-relaxed text-muted">
-              使用哔哩哔哩手机 App 扫码登录，以获取高清与大会员清晰度的下载权限。
-            </p>
-            <Button
-              variant="primary"
-              size="lg"
-              className="w-full rounded-full"
-              onClick={onLogin}
-            >
-              <LogIn size={17} aria-hidden="true" />
-              使用二维码登录
-            </Button>
+            <QrLoginPanel />
             <p className="text-center text-xs text-subtle-fg">登录信息仅保存在本机。</p>
           </CardBody>
         </Card>
@@ -174,13 +153,10 @@ function Welcome({ onLogin }: { onLogin: () => void }) {
 }
 
 function App() {
-  const { isLoggedIn, userProfile, logout, loadLoginData, loadSettings, downloads } = useAppStore();
+  const { isLoggedIn, loadLoginData, loadSettings, downloads } = useAppStore();
   const [page, setPage] = useState<Page>('download');
-  const [showLogin, setShowLogin] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showUserProfile, setShowUserProfile] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
-  const { isDark, toggleTheme } = useTheme();
+
+  useSystemTheme();
 
   // 应用启动时自动加载登录状态与下载设置
   useEffect(() => {
@@ -188,203 +164,61 @@ function App() {
     loadSettings();
   }, [loadLoginData, loadSettings]);
 
-  // 点击菜单外部或按下 Esc 关闭用户菜单
+  // 退出登录后回到首页，避免下次登录直接落在"我的"
   useEffect(() => {
-    if (!showUserMenu) return undefined;
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
-        setShowUserMenu(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setShowUserMenu(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [showUserMenu]);
+    if (!isLoggedIn) {
+      setPage('download');
+    }
+  }, [isLoggedIn]);
 
   return (
     <MessageProvider>
       <div className="flex h-screen overflow-hidden bg-subtle text-fg">
         {/* 登录后才显示侧边栏导航 */}
         {isLoggedIn && (
-        <aside className="flex w-[228px] shrink-0 flex-col border-r border-line bg-canvas">
-          {/* 顶部为窗口拖动区；macOS 覆盖式标题栏下为交通灯按钮留出左侧空间 */}
-          <div
-            data-tauri-drag-region
-            className={cn(
-              'flex h-16 shrink-0 items-center gap-2 pr-4',
-              hasOverlayTitleBar() ? 'pl-[86px]' : 'pl-5',
-            )}
-          >
-            <Logo className="pointer-events-none h-8 w-8" />
-            <div className="pointer-events-none min-w-0">
-              <p className="truncate text-[15px] font-bold leading-tight tracking-tight text-fg">
-                DILIDILI
-              </p>
-              <p className="truncate text-[11px] leading-tight text-muted">哔哩哔哩下载器</p>
-            </div>
-          </div>
+          <aside className="flex w-[228px] shrink-0 flex-col border-r border-line bg-canvas">
+            {/* macOS 覆盖式标题栏：顶部留出交通灯空间，同时作为窗口拖动区 */}
+            {hasOverlayTitleBar() && <div data-tauri-drag-region className="h-10 shrink-0" />}
 
-          <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-3" aria-label="主导航">
-            <SideNavItem
-              active={page === 'download'}
-              icon={Download}
-              onClick={() => setPage('download')}
-              badge={downloads.length || undefined}
-            >
-              下载
-            </SideNavItem>
-            <SideNavItem
-              active={page === 'test'}
-              icon={FlaskConical}
-              onClick={() => setPage('test')}
-            >
-              测试
-            </SideNavItem>
-            <SideNavItem
-              active={page === 'settings'}
-              icon={SettingsIcon}
-              onClick={() => setPage('settings')}
-            >
-              设置
-            </SideNavItem>
-          </nav>
-
-          <div className="shrink-0 space-y-1 border-t border-line-muted p-3">
-            <button
-              type="button"
-              onClick={toggleTheme}
-              title={isDark ? '切换到浅色模式' : '切换到深色模式'}
-              aria-label={isDark ? '切换到浅色模式' : '切换到深色模式'}
-              className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm text-muted transition-colors hover:bg-subtle hover:text-fg"
-            >
-              {isDark ? (
-                <Sun size={18} className="shrink-0 text-subtle-fg" aria-hidden="true" />
-              ) : (
-                <Moon size={18} className="shrink-0 text-subtle-fg" aria-hidden="true" />
-              )}
-              {isDark ? '浅色模式' : '深色模式'}
-            </button>
-
-            {isLoggedIn ? (
-              <div className="relative" ref={userMenuRef}>
-                <button
-                  type="button"
-                  onClick={() => setShowUserMenu((open) => !open)}
-                  aria-haspopup="menu"
-                  aria-expanded={showUserMenu}
-                  className="flex w-full items-center gap-2.5 rounded-xl p-2 transition-colors hover:bg-subtle"
-                >
-                  <Avatar
-                    src={userProfile?.avatar}
-                    name={userProfile?.name}
-                    className="h-8 w-8 border-transparent"
-                    iconSize={15}
-                  />
-                  <span className="min-w-0 flex-1 text-left">
-                    <span className="block truncate text-sm font-medium text-fg">
-                      {userProfile?.name || '用户'}
-                    </span>
-                    <span className="block truncate font-mono text-[11px] text-muted">
-                      UID {userProfile?.mid ?? '未知'}
-                    </span>
-                  </span>
-                  <ChevronDown
-                    size={14}
-                    aria-hidden="true"
-                    className={cn(
-                      'shrink-0 text-muted transition-transform',
-                      showUserMenu && 'rotate-180',
-                    )}
-                  />
-                </button>
-
-                {showUserMenu && (
-                  <div
-                    role="menu"
-                    className="absolute bottom-full left-0 right-0 z-50 mb-2 animate-menu-in overflow-hidden rounded-xl border border-line bg-canvas text-fg shadow-pop"
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setShowUserMenu(false);
-                        setShowUserProfile(true);
-                      }}
-                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm transition-colors hover:bg-subtle"
-                    >
-                      <UserRound size={16} className="text-muted" aria-hidden="true" />
-                      个人信息
-                    </button>
-                    <div className="border-t border-line-muted" />
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setShowUserMenu(false);
-                        setPage('download');
-                        logout();
-                      }}
-                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-danger-fg transition-colors hover:bg-danger-subtle"
-                    >
-                      <LogOut size={16} aria-hidden="true" />
-                      退出登录
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <Button
-                variant="primary"
-                className="w-full rounded-full"
-                onClick={() => setShowLogin(true)}
+            <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-3" aria-label="主导航">
+              <SideNavItem
+                active={page === 'download'}
+                icon={Download}
+                onClick={() => setPage('download')}
+                badge={downloads.length || undefined}
               >
-                <LogIn size={16} aria-hidden="true" />
-                登录
-              </Button>
-            )}
-          </div>
-        </aside>
+                下载
+              </SideNavItem>
+              <SideNavItem
+                active={page === 'test'}
+                icon={FlaskConical}
+                onClick={() => setPage('test')}
+              >
+                测试
+              </SideNavItem>
+              <SideNavItem
+                active={page === 'settings'}
+                icon={UserRound}
+                onClick={() => setPage('settings')}
+              >
+                我的
+              </SideNavItem>
+            </nav>
+          </aside>
         )}
 
         {/* 内容区：独立滚动 */}
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {!isLoggedIn ? (
-            <Welcome onLogin={() => setShowLogin(true)} />
+            <Welcome />
           ) : page === 'settings' ? (
-            <SettingsPage onBack={() => setPage('download')} />
+            <SettingsPage />
           ) : page === 'test' ? (
             <TestPage />
           ) : (
-            <Downloader onOpenSettings={() => setPage('settings')} />
+            <Downloader />
           )}
         </main>
-
-        {!isLoggedIn && (
-          <button
-            type="button"
-            onClick={toggleTheme}
-            title={isDark ? '切换到浅色模式' : '切换到深色模式'}
-            aria-label={isDark ? '切换到浅色模式' : '切换到深色模式'}
-            className="fixed right-5 top-5 z-40 inline-flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-subtle hover:text-fg"
-          >
-            {isDark ? <Sun size={18} aria-hidden="true" /> : <Moon size={18} aria-hidden="true" />}
-          </button>
-        )}
-
-        {showLogin && <Login onClose={() => setShowLogin(false)} />}
-
-        {showUserProfile && <UserProfile onClose={() => setShowUserProfile(false)} />}
       </div>
     </MessageProvider>
   );

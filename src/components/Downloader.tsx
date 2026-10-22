@@ -5,14 +5,12 @@ import {
   CheckCircle2,
   Clock,
   Download,
-  ExternalLink,
   FileVideo,
   FolderOpen,
   Link2,
   Loader2,
   Music,
   RotateCw,
-  Settings as SettingsIcon,
   SlidersHorizontal,
   X,
   XCircle,
@@ -44,16 +42,12 @@ function formatDuration(totalSeconds: number): string {
   return minutes > 0 ? `${minutes} 分 ${seconds} 秒` : `${seconds} 秒`;
 }
 
-interface DownloaderProps {
-  onOpenSettings: () => void;
-}
-
 interface DownloadProgressEvent {
   downloadId: string;
   progress: number;
 }
 
-export default function Downloader({ onOpenSettings }: DownloaderProps) {
+export default function Downloader() {
   const [videoUrl, setVideoUrl] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentVideoData, setCurrentVideoData] = useState<VideoData | null>(null);
@@ -68,7 +62,6 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
     setDownloadFilePath,
     isLoggedIn,
     cookies,
-    downloadDir,
   } = useAppStore();
   const { success, error, warning, info } = useMessage();
 
@@ -343,7 +336,7 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
               onChange={(event) => setVideoUrl(event.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="https://www.bilibili.com/video/BV... 或 BV1xx411c7mD"
-              className="h-11 flex-1 rounded-full border border-transparent bg-subtle px-5 font-mono text-sm text-fg outline-none transition-all placeholder:font-sans placeholder:text-subtle-fg hover:bg-inset focus:border-accent focus:bg-canvas focus:ring-4 focus:ring-accent/10 disabled:opacity-60"
+              className="h-11 flex-1 rounded-full border border-transparent bg-inset px-5 font-mono text-sm text-fg outline-none transition-all placeholder:font-sans placeholder:text-subtle-fg hover:bg-neutral-subtle focus:border-accent focus:bg-canvas focus:ring-4 focus:ring-accent/10 disabled:opacity-60"
               disabled={isAnalyzing}
             />
             <Button
@@ -383,7 +376,7 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
             role="dialog"
             aria-modal="true"
             aria-labelledby="quality-dialog-title"
-            className="w-full max-w-lg animate-dialog-in overflow-hidden rounded-2xl border border-line bg-canvas shadow-pop"
+            className="w-full max-w-lg animate-dialog-in overflow-hidden rounded-2xl border border-line bg-canvas"
           >
             <div className="flex items-center justify-between border-b border-line-muted px-5 py-4">
               <h2
@@ -397,7 +390,7 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
                 type="button"
                 onClick={cancelQualitySelect}
                 aria-label="取消选择"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-subtle hover:text-fg"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-inset hover:text-fg"
               >
                 <X size={16} aria-hidden="true" />
               </button>
@@ -459,24 +452,7 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
             下载队列
             <span className="font-normal text-muted">({downloadQueue.length})</span>
           </CardTitle>
-          <div className="flex items-center gap-2">
-            <Button size="sm" onClick={onOpenSettings}>
-              <SettingsIcon size={14} aria-hidden="true" />
-              下载设置
-            </Button>
-            <Button size="sm" onClick={() => openFolder(downloadDir)} disabled={!downloadDir}>
-              <ExternalLink size={14} aria-hidden="true" />
-              打开目录
-            </Button>
-          </div>
         </CardHeader>
-
-        {downloadDir && (
-          <div className="flex shrink-0 items-center gap-2 border-b border-line-muted bg-subtle px-5 py-2.5 text-xs text-muted">
-            <FolderOpen size={13} className="shrink-0 text-subtle-fg" aria-hidden="true" />
-            <span className="truncate font-mono">{downloadDir}</span>
-          </div>
-        )}
 
         {downloadQueue.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center px-5 py-10 text-center">
@@ -491,7 +467,7 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
             {downloadQueue.map((item) => (
               <li
                 key={item.id}
-                className="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-subtle/60 sm:flex-row sm:items-center"
+                className="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-inset/60 sm:flex-row sm:items-center"
               >
                 <div className="flex min-w-0 flex-1 gap-3.5">
                   {item.videoData?.pic && (
@@ -551,9 +527,7 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
                     )}
 
                     {item.status === 'completed' && !item.filePath && (
-                      <p className="mt-2 text-xs text-subtle-fg">
-                        文件已保存到下载目录{downloadDir ? `：${downloadDir}` : '。'}
-                      </p>
+                      <p className="mt-2 text-xs text-subtle-fg">文件已保存到下载目录。</p>
                     )}
                   </div>
                 </div>

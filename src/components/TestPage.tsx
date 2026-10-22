@@ -242,7 +242,7 @@ export default function TestPage() {
               </CardTitle>
             </CardHeader>
             <CardBody>
-              <pre className="custom-scrollbar min-h-64 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-subtle p-3.5 font-mono text-xs leading-relaxed text-fg">
+              <pre className="custom-scrollbar min-h-64 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-inset p-3.5 font-mono text-xs leading-relaxed text-fg">
                 {testResult ||
                   '点击「完整功能测试」或「快速检查」开始。\n\n完整功能测试 — 检测所有下载相关功能\n快速检查 — 仅检查基本环境状态'}
               </pre>

@@ -122,7 +122,7 @@ function MessageItem({ message: msg, onClose }: MessageItemProps) {
     <div
       role="status"
       className={cn(
-        'flex items-start gap-2.5 rounded-md border border-line bg-canvas px-3 py-2.5 shadow-lg',
+        'flex items-start gap-2.5 rounded-md border border-line bg-canvas px-3 py-2.5',
         'transition-all duration-200 ease-out',
         msg.isVisible ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0',
       )}

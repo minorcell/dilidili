@@ -17,9 +17,9 @@ const buttonVariants = cva(
         default: 'border-line bg-canvas text-fg hover:border-accent/40 hover:bg-accent-subtle hover:text-accent-fg',
         // 主按钮：品牌粉
         primary:
-          'border-transparent bg-accent text-white shadow-[0_2px_10px_rgba(251,114,153,0.35)] hover:bg-[#fc8bab] hover:shadow-[0_4px_14px_rgba(251,114,153,0.45)]',
+          'border-transparent bg-accent text-white hover:bg-[#fc8bab]',
         // 描边按钮
-        outline: 'border-line bg-transparent text-fg hover:bg-subtle',
+        outline: 'border-line bg-transparent text-fg hover:bg-inset',
         ghost: 'border-transparent bg-transparent text-muted hover:bg-neutral-subtle hover:text-fg',
         danger:
           'border-transparent bg-danger-subtle text-danger-fg hover:bg-danger hover:text-white',
