@@ -215,7 +215,7 @@ function App() {
         {/* 侧边栏导航 */}
         <aside className="flex w-[228px] shrink-0 flex-col border-r border-line bg-canvas">
           <div className="flex h-16 shrink-0 items-center gap-2.5 px-5">
-            <Logo className="h-9 w-9" iconSize={20} />
+            <Logo className="h-9 w-9" />
             <div className="min-w-0">
               <p className="truncate text-[15px] font-bold leading-tight tracking-tight text-fg">
                 DILIDILI
