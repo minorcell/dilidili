@@ -23,7 +23,7 @@ export default function Avatar({ src, name, className, iconSize = 16 }: AvatarPr
   return (
     <span
       className={cn(
-        'relative flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-line bg-subtle text-muted',
+        'relative flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-line bg-accent-subtle text-accent-fg',
         className,
       )}
       aria-label={name ? `${name} 的头像` : '用户头像'}
@@ -32,8 +32,8 @@ export default function Avatar({ src, name, className, iconSize = 16 }: AvatarPr
         <img
           src={imageSrc}
           alt={name ? `${name} 的头像` : '用户头像'}
-          className="h-full w-full object-cover"
-          // B 站图床会校验 Referer，置空才能正常加载
+          className="absolute inset-0 h-full w-full object-cover"
+          // B 站图床会拒绝带有非 B 站 Referer 的请求，置空才能正常加载
           referrerPolicy="no-referrer"
           loading="lazy"
           onError={() => setFailed(true)}
