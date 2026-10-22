@@ -7,6 +7,8 @@ cask "dilidili" do
   desc "哔哩哔哩视频下载器"
   homepage "https://github.com/minorcell/dilidili"
 
+  depends_on macos: ">= :catalina"
+
   app "DILIDILI.app"
 
   caveats <<~EOS
