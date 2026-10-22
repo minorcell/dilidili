@@ -5,7 +5,7 @@
 DILIDILI 是一款免费、开源的哔哩哔哩视频下载工具，支持 Windows、macOS 和 Linux。
 粘贴链接、选好画质，剩下的交给它。
 
-[⬇️ 下载最新版本](https://github.com/minorcell/dilidili/releases/latest) · [🌐 访问官网](https://dilidili.mcell.top) · [💬 反馈问题](https://github.com/minorcell/dilidili/issues)
+[⬇️ 下载最新版本](https://github.com/minorcell/dilidili/releases/latest) · [🌐 访问官网](https://minorcell.github.io/dilidili/) · [💬 反馈问题](https://github.com/minorcell/dilidili/issues)
 
 ## ✨ 为什么用它
 
