@@ -20,6 +20,8 @@ jobs:
   macos:
     name: Build macOS DMG
     runs-on: macos-latest
+    env:
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -93,7 +95,6 @@ jobs:
           shasum -a 256 "$ASSET"
 
       - name: Upload asset to release
-        if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload "${{ steps.version.outputs.tag }}" "${{ steps.asset.outputs.path }}" --clobber
@@ -117,9 +118,8 @@ jobs:
           fi
 
       - name: Update Homebrew tap
-        if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+        if: ${{ env.TAP_TOKEN != '' }}
         env:
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           git clone "https://x-access-token:${TAP_TOKEN}@github.com/minorcell/dilidili-homebrew.git" "$RUNNER_TEMP/dilidili-homebrew"
