@@ -1,8 +1,8 @@
 [package]
-name = "cilicili"
+name = "dilidili"
 version = "0.5.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "哔哩哔哩视频下载器"
+authors = ["minorcell"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
