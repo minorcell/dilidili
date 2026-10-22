@@ -1,7 +1,10 @@
 use crate::fs_utils::{replace_file, temp_suffix, TempFileGuard, TempFileSet};
 use crate::types::*;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
+use tauri::Emitter;
 use tokio::io::AsyncWriteExt;
 
 // 用户代理
@@ -10,15 +13,90 @@ const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 // 写文件时使用的缓冲区大小（256 KiB），避免每个网络分片都触发一次系统调用
 const WRITE_BUFFER_SIZE: usize = 256 * 1024;
 
+// 推送给前端的下载进度
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DownloadProgressPayload {
+    download_id: String,
+    progress: f64,
+}
+
+// 视频流与音频流并发下载，两者共享同一个进度统计：
+// 已下载字节累加后除以两路总大小，得到一个整体百分比。
+struct ProgressReporter {
+    app: tauri::AppHandle,
+    download_id: String,
+    total: AtomicU64,
+    downloaded: AtomicU64,
+    last_percent: AtomicU8,
+}
+
+impl ProgressReporter {
+    fn new(app: tauri::AppHandle, download_id: String, total: u64) -> Self {
+        Self {
+            app,
+            download_id,
+            total: AtomicU64::new(total),
+            downloaded: AtomicU64::new(0),
+            last_percent: AtomicU8::new(0),
+        }
+    }
+
+    fn add_downloaded(&self, bytes: u64) {
+        self.downloaded.fetch_add(bytes, Ordering::Relaxed);
+        self.report();
+    }
+
+    // HEAD 探测失败时，用实际响应的 Content-Length 兜底
+    fn ensure_total(&self, total: u64) {
+        let _ = self.total.compare_exchange(
+            0,
+            total,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        );
+    }
+
+    fn report(&self) {
+        let total = self.total.load(Ordering::Relaxed);
+        if total == 0 {
+            return;
+        }
+
+        // 保留最后的 1%，等 ffmpeg 合并完成后再由前端置为 100%
+        let percent = ((self.downloaded.load(Ordering::Relaxed) * 100 / total).min(99)) as u8;
+        if percent == 0 {
+            return;
+        }
+
+        let last = self.last_percent.load(Ordering::Relaxed);
+        if percent > last
+            && self
+                .last_percent
+                .compare_exchange(last, percent, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+        {
+            let _ = self.app.emit(
+                "download-progress",
+                DownloadProgressPayload {
+                    download_id: self.download_id.clone(),
+                    progress: percent as f64,
+                },
+            );
+        }
+    }
+}
+
 // 构建媒体流请求，视频流和音频流共用同一套请求头
-fn stream_request(
+fn stream_request_with_method(
     client: &reqwest::Client,
+    method: reqwest::Method,
     url: &str,
     cookies: &str,
     referer: &str,
 ) -> reqwest::RequestBuilder {
     client
-        .get(url)
+        .request(method, url)
         .header("Cookie", cookies)
         .header("Referer", referer)
         .header("Origin", "https://www.bilibili.com")
@@ -28,6 +106,30 @@ fn stream_request(
         .header("Sec-Fetch-Dest", "empty")
         .header("Sec-Fetch-Mode", "cors")
         .header("Sec-Fetch-Site", "cross-site")
+}
+
+fn stream_request(
+    client: &reqwest::Client,
+    url: &str,
+    cookies: &str,
+    referer: &str,
+) -> reqwest::RequestBuilder {
+    stream_request_with_method(client, reqwest::Method::GET, url, cookies, referer)
+}
+
+// 用 HEAD 请求探测媒体流大小，用于计算整体下载进度。
+// B 站的 DASH 接口不返回文件大小，只能从 CDN 响应里取。
+async fn probe_content_length(
+    client: &reqwest::Client,
+    url: &str,
+    cookies: &str,
+    referer: &str,
+) -> Option<u64> {
+    stream_request_with_method(client, reqwest::Method::HEAD, url, cookies, referer)
+        .send()
+        .await
+        .ok()?
+        .content_length()
 }
 
 // 流式下载单个媒体流到文件。
@@ -45,6 +147,7 @@ async fn download_stream_to_file(
     referer: &str,
     path: &Path,
     label: &str,
+    reporter: Option<Arc<ProgressReporter>>,
 ) -> Result<u64, String> {
     println!("=== 开始下载{} ===", label);
     println!("{}URL: {}", label, url);
@@ -66,6 +169,12 @@ async fn download_stream_to_file(
         return Err(format!("{}下载失败: {} - {}", label, status, error_text));
     }
 
+    if let Some(length) = response.content_length() {
+        if let Some(reporter) = reporter.as_ref() {
+            reporter.ensure_total(length);
+        }
+    }
+
     let file = tokio::fs::File::create(path)
         .await
         .map_err(|e| format!("创建{}文件失败: {}", label, e))?;
@@ -84,6 +193,9 @@ async fn download_stream_to_file(
                     .await
                     .map_err(|e| format!("写入{}文件失败: {}", label, e))?;
                 downloaded += chunk.len() as u64;
+                if let Some(reporter) = reporter.as_ref() {
+                    reporter.add_downloaded(chunk.len() as u64);
+                }
             }
             Ok(None) => break,
             Err(e) => return Err(format!("读取{}内容失败: {}", label, e)),
@@ -114,6 +226,7 @@ pub async fn download_video(
     video_stream: VideoStream,
     audio_stream: AudioStream,
     cookies: String,
+    download_id: Option<String>,
 ) -> Result<String, String> {
     println!("=== 开始下载视频 ===");
     println!("视频标题: {}", video_data.title);
@@ -166,6 +279,26 @@ pub async fn download_video(
 
     let referer = format!("https://www.bilibili.com/video/{}", video_data.bvid);
 
+    // DASH 数据里没有文件大小，先并发探测两路流的总字节数，
+    // 这样并发下载时也能按整体字节数计算进度。
+    let (video_size, audio_size) = tokio::join!(
+        probe_content_length(&client, video_url, &cookies, &referer),
+        async {
+            match audio_url {
+                Some(url) => probe_content_length(&client, url, &cookies, &referer).await,
+                None => None,
+            }
+        }
+    );
+
+    let reporter = download_id.map(|id| {
+        Arc::new(ProgressReporter::new(
+            app_handle.clone(),
+            id,
+            video_size.unwrap_or(0) + audio_size.unwrap_or(0),
+        ))
+    });
+
     // 视频流和音频流互不依赖，并发下载可以显著缩短总耗时。
     let mut video_fut = Box::pin(download_stream_to_file(
         &client,
@@ -174,6 +307,7 @@ pub async fn download_video(
         &referer,
         &video_temp,
         "视频流",
+        reporter.clone(),
     ));
 
     let mut audio_fut = match audio_url {
@@ -184,6 +318,7 @@ pub async fn download_video(
             &referer,
             &audio_temp,
             "音频流",
+            reporter.clone(),
         ))),
         None => {
             println!("⚠️ 音频流URL为空，跳过音频下载");

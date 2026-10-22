@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import {
   CheckCircle2,
   Clock,
@@ -45,6 +46,11 @@ function formatDuration(totalSeconds: number): string {
 
 interface DownloaderProps {
   onOpenSettings: () => void;
+}
+
+interface DownloadProgressEvent {
+  downloadId: string;
+  progress: number;
 }
 
 export default function Downloader({ onOpenSettings }: DownloaderProps) {
@@ -195,15 +201,25 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
       return;
     }
 
+    let unlisten: (() => void) | undefined;
+
     try {
       updateDownloadStatus(downloadItem.id, 'downloading');
       updateDownloadProgress(downloadItem.id, 0);
+
+      // 后端按已下载字节定期推送整体进度
+      unlisten = await listen<DownloadProgressEvent>('download-progress', (event) => {
+        if (event.payload.downloadId === downloadItem.id) {
+          updateDownloadProgress(downloadItem.id, Math.round(event.payload.progress));
+        }
+      });
 
       const result = await invoke<string>('download_video', {
         videoData: downloadItem.videoData,
         videoStream: downloadItem.selectedQuality.video,
         audioStream: downloadItem.selectedQuality.audio,
         cookies,
+        downloadId: downloadItem.id,
       });
 
       updateDownloadStatus(downloadItem.id, 'completed');
@@ -213,6 +229,8 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
     } catch (downloadError) {
       updateDownloadStatus(downloadItem.id, 'failed');
       error(`下载失败：${downloadError}`);
+    } finally {
+      unlisten?.();
     }
   };
 
