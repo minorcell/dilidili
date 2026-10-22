@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use tauri::Manager;
+use tokio::process::Command;
 
 // 获取ffmpeg可执行文件路径
 fn get_ffmpeg_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -87,58 +87,78 @@ pub async fn merge_video_audio(
     
     // 确保输出目录存在
     if let Some(parent) = Path::new(&output_path).parent() {
-        std::fs::create_dir_all(parent).map_err(|e| format!("创建输出目录失败: {}", e))?;
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|e| format!("创建输出目录失败: {}", e))?;
     }
     
-    // 先检测音频格式，然后决定处理方式
-    let mut cmd = Command::new(&ffmpeg_path);
-    
-    // 对于B站的M4S文件，使用更兼容的参数
-    if audio_path.ends_with(".m4s") || audio_path.ends_with(".mp3") {
-        cmd.args(&[
-            "-i", &video_path,          // 输入视频
-            "-i", &audio_path,          // 输入音频
-            "-c:v", "copy",             // 视频流复制
-            "-c:a", "aac",              // 音频重新编码为AAC（更兼容）
-            "-b:a", "128k",             // 音频比特率
-            "-movflags", "+faststart",   // 优化流媒体播放
-            "-avoid_negative_ts", "make_zero", // 避免负时间戳
-            "-y",                       // 覆盖输出文件
-            &output_path
-        ]);
+    // 先尝试直接复制音频流（B站DASH音频本身已是AAC，无需重新编码）。
+    // 复制模式远快于重新编码；若封装不兼容再回退到AAC转码。
+    let output = run_merge(&ffmpeg_path, &video_path, &audio_path, &output_path, true).await?;
+
+    if !output.status.success() {
+        println!("⚠️ 音频流复制失败，回退到AAC转码");
+        let output = run_merge(&ffmpeg_path, &video_path, &audio_path, &output_path, false).await?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            println!("ffmpeg错误输出: {}", stderr);
+            let _ = tokio::fs::remove_file(&output_path).await;
+            return Err(format!("ffmpeg合并失败: {}", stderr));
+        }
+    }
+
+    println!("✅ 音视频合并成功");
+    println!("输出文件: {}", output_path);
+
+    // 删除临时文件
+    let _ = tokio::fs::remove_file(&video_path).await;
+    let _ = tokio::fs::remove_file(&audio_path).await;
+
+    Ok(output_path)
+}
+
+// 构建合并命令。`copy_audio` 为 true 时直接复制音频流，否则转码为 AAC。
+fn merge_command(
+    ffmpeg_path: &Path,
+    video_path: &str,
+    audio_path: &str,
+    output_path: &str,
+    copy_audio: bool,
+) -> Command {
+    let mut cmd = Command::new(ffmpeg_path);
+    cmd.args(["-hide_banner", "-loglevel", "error", "-nostdin"])
+        .args(["-i", video_path])
+        .args(["-i", audio_path])
+        .args(["-c:v", "copy"]);
+
+    if copy_audio {
+        cmd.args(["-c:a", "copy"]);
     } else {
-        // 其他格式使用复制模式
-        cmd.args(&[
-            "-i", &video_path,          
-            "-i", &audio_path,          
-            "-c:v", "copy",             
-            "-c:a", "copy",             
-            "-movflags", "+faststart",   
-            "-y",                       
-            &output_path
-        ]);
+        cmd.args(["-c:a", "aac", "-b:a", "128k"]);
     }
-    
+
+    cmd.args([
+        "-movflags", "+faststart",          // 优化流媒体播放
+        "-avoid_negative_ts", "make_zero",  // 避免负时间戳
+        "-y",                               // 覆盖输出文件
+        output_path,
+    ]);
+
+    cmd
+}
+
+async fn run_merge(
+    ffmpeg_path: &Path,
+    video_path: &str,
+    audio_path: &str,
+    output_path: &str,
+    copy_audio: bool,
+) -> Result<std::process::Output, String> {
+    let mut cmd = merge_command(ffmpeg_path, video_path, audio_path, output_path, copy_audio);
     println!("执行命令: {:?}", cmd);
-    
-    let output = cmd.output().map_err(|e| format!("执行ffmpeg失败: {}", e))?;
-    
-    if output.status.success() {
-        println!("✅ 音视频合并成功");
-        println!("输出文件: {}", output_path);
-        
-        // 删除临时文件
-        let _ = std::fs::remove_file(&video_path);
-        let _ = std::fs::remove_file(&audio_path);
-        
-        Ok(output_path)
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        println!("ffmpeg错误输出: {}", stderr);
-        println!("ffmpeg标准输出: {}", stdout);
-        Err(format!("ffmpeg合并失败: {}", stderr))
-    }
+    cmd.output()
+        .await
+        .map_err(|e| format!("执行ffmpeg失败: {}", e))
 }
 
 // 转换视频格式
@@ -162,11 +182,14 @@ pub async fn convert_video_format(
     
     // 确保输出目录存在
     if let Some(parent) = Path::new(&output_path).parent() {
-        std::fs::create_dir_all(parent).map_err(|e| format!("创建输出目录失败: {}", e))?;
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|e| format!("创建输出目录失败: {}", e))?;
     }
     
     let mut cmd = Command::new(&ffmpeg_path);
-    
+    cmd.args(["-hide_banner", "-loglevel", "error", "-nostdin"]);
+
     // 根据格式选择不同的编码参数
     match format.to_lowercase().as_str() {
         "mp4" => {
@@ -205,7 +228,7 @@ pub async fn convert_video_format(
     
     println!("执行命令: {:?}", cmd);
     
-    let output = cmd.output().map_err(|e| format!("执行ffmpeg失败: {}", e))?;
+    let output = cmd.output().await.map_err(|e| format!("执行ffmpeg失败: {}", e))?;
     
     if output.status.success() {
         println!("✅ 视频格式转换成功");
@@ -238,11 +261,14 @@ pub async fn extract_audio(
     
     // 确保输出目录存在
     if let Some(parent) = Path::new(&audio_path).parent() {
-        std::fs::create_dir_all(parent).map_err(|e| format!("创建输出目录失败: {}", e))?;
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|e| format!("创建输出目录失败: {}", e))?;
     }
     
     let mut cmd = Command::new(&ffmpeg_path);
-    
+    cmd.args(["-hide_banner", "-loglevel", "error", "-nostdin"]);
+
     match format.to_lowercase().as_str() {
         "mp3" => {
             cmd.args(&[
@@ -280,7 +306,7 @@ pub async fn extract_audio(
     
     println!("执行命令: {:?}", cmd);
     
-    let output = cmd.output().map_err(|e| format!("执行ffmpeg失败: {}", e))?;
+    let output = cmd.output().await.map_err(|e| format!("执行ffmpeg失败: {}", e))?;
     
     if output.status.success() {
         println!("✅ 音频提取成功");
@@ -318,7 +344,7 @@ pub async fn get_local_video_info(
         &video_path
     ]);
     
-    let output = cmd.output().map_err(|e| format!("执行ffprobe失败: {}", e))?;
+    let output = cmd.output().await.map_err(|e| format!("执行ffprobe失败: {}", e))?;
     
     if output.status.success() {
         let info = String::from_utf8_lossy(&output.stdout);
