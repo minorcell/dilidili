@@ -122,10 +122,10 @@ jobs:
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/minorcell/homebrew-tap.git" "$RUNNER_TEMP/homebrew-tap"
-          mkdir -p "$RUNNER_TEMP/homebrew-tap/Casks"
-          cp Casks/dilidili.rb "$RUNNER_TEMP/homebrew-tap/Casks/dilidili.rb"
-          cd "$RUNNER_TEMP/homebrew-tap"
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/minorcell/dilidili-homebrew.git" "$RUNNER_TEMP/dilidili-homebrew"
+          mkdir -p "$RUNNER_TEMP/dilidili-homebrew/Casks"
+          cp Casks/dilidili.rb "$RUNNER_TEMP/dilidili-homebrew/Casks/dilidili.rb"
+          cd "$RUNNER_TEMP/dilidili-homebrew"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add Casks/dilidili.rb
