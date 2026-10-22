@@ -139,9 +139,11 @@ export default function TestPage() {
   return (
     <div className="custom-scrollbar h-full overflow-y-auto p-6">
       <div className="mx-auto w-full max-w-5xl space-y-4">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-fg">测试</h1>
-          <p className="mt-0.5 text-xs text-muted">检查运行环境、登录状态与下载链路是否正常。</p>
+        <div data-tauri-drag-region>
+          <h1 className="pointer-events-none text-xl font-bold tracking-tight text-fg">测试</h1>
+          <p className="pointer-events-none mt-0.5 text-xs text-muted">
+            检查运行环境、登录状态与下载链路是否正常。
+          </p>
         </div>
 
         <Card>

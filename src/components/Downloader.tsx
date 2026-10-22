@@ -322,9 +322,11 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
 
   return (
     <div className="flex h-full flex-col gap-4 p-6">
-      <div className="shrink-0">
-        <h1 className="text-xl font-bold tracking-tight text-fg">下载</h1>
-        <p className="mt-0.5 text-xs text-muted">粘贴视频链接或 BV 号，选择清晰度后加入下载队列。</p>
+      <div className="shrink-0" data-tauri-drag-region>
+        <h1 className="pointer-events-none text-xl font-bold tracking-tight text-fg">下载</h1>
+        <p className="pointer-events-none mt-0.5 text-xs text-muted">
+          粘贴视频链接或 BV 号，选择清晰度后加入下载队列。
+        </p>
       </div>
 
       {/* 视频链接输入区域 */}

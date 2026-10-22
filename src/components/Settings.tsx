@@ -66,9 +66,11 @@ export default function Settings({ onBack }: SettingsProps) {
     <div className="custom-scrollbar h-full overflow-y-auto">
       <div className="mx-auto w-full max-w-3xl space-y-5 p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-fg">设置</h1>
-            <p className="mt-0.5 text-xs text-muted">配置下载文件的保存位置。</p>
+          <div data-tauri-drag-region>
+            <h1 className="pointer-events-none text-xl font-bold tracking-tight text-fg">设置</h1>
+            <p className="pointer-events-none mt-0.5 text-xs text-muted">
+              配置下载文件的保存位置。
+            </p>
           </div>
           <Button size="sm" className="rounded-full" onClick={onBack}>
             <ArrowLeft size={14} aria-hidden="true" />

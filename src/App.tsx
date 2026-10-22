@@ -28,6 +28,7 @@ import Logo from './components/ui/Logo';
 import { MessageProvider } from './components/ui/MessageContext';
 import { useTheme } from './lib/theme';
 import { cn } from './lib/utils';
+import { hasOverlayTitleBar } from './lib/platform';
 import { useAppStore } from './store/appStore';
 
 type Page = 'download' | 'test' | 'settings';
@@ -107,6 +108,8 @@ function Welcome({ onLogin }: { onLogin: () => void }) {
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,rgba(251,114,153,0.14),transparent_72%)] dark:bg-[radial-gradient(60%_50%_at_50%_0%,rgba(251,114,153,0.1),transparent_72%)]"
         aria-hidden="true"
       />
+      {/* 无侧边栏时也要保留窗口拖动区域 */}
+      <div data-tauri-drag-region className="absolute inset-x-0 top-0 h-12" aria-hidden="true" />
       <div className="relative mx-auto grid min-h-full w-full max-w-4xl items-center gap-10 px-10 py-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-14">
         <section>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-subtle px-3 py-1 text-xs font-medium text-accent-fg">
@@ -212,11 +215,19 @@ function App() {
   return (
     <MessageProvider>
       <div className="flex h-screen overflow-hidden bg-subtle text-fg">
-        {/* 侧边栏导航 */}
+        {/* 登录后才显示侧边栏导航 */}
+        {isLoggedIn && (
         <aside className="flex w-[228px] shrink-0 flex-col border-r border-line bg-canvas">
-          <div className="flex h-16 shrink-0 items-center gap-2.5 px-5">
-            <Logo className="h-9 w-9" />
-            <div className="min-w-0">
+          {/* 顶部为窗口拖动区；macOS 覆盖式标题栏下为交通灯按钮留出左侧空间 */}
+          <div
+            data-tauri-drag-region
+            className={cn(
+              'flex h-16 shrink-0 items-center gap-2 pr-4',
+              hasOverlayTitleBar() ? 'pl-[86px]' : 'pl-5',
+            )}
+          >
+            <Logo className="pointer-events-none h-8 w-8" />
+            <div className="pointer-events-none min-w-0">
               <p className="truncate text-[15px] font-bold leading-tight tracking-tight text-fg">
                 DILIDILI
               </p>
@@ -321,6 +332,7 @@ function App() {
                       role="menuitem"
                       onClick={() => {
                         setShowUserMenu(false);
+                        setPage('download');
                         logout();
                       }}
                       className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-danger-fg transition-colors hover:bg-danger-subtle"
@@ -343,19 +355,32 @@ function App() {
             )}
           </div>
         </aside>
+        )}
 
         {/* 内容区：独立滚动 */}
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          {page === 'settings' ? (
+          {!isLoggedIn ? (
+            <Welcome onLogin={() => setShowLogin(true)} />
+          ) : page === 'settings' ? (
             <SettingsPage onBack={() => setPage('download')} />
           ) : page === 'test' ? (
             <TestPage />
-          ) : isLoggedIn ? (
-            <Downloader onOpenSettings={() => setPage('settings')} />
           ) : (
-            <Welcome onLogin={() => setShowLogin(true)} />
+            <Downloader onOpenSettings={() => setPage('settings')} />
           )}
         </main>
+
+        {!isLoggedIn && (
+          <button
+            type="button"
+            onClick={toggleTheme}
+            title={isDark ? '切换到浅色模式' : '切换到深色模式'}
+            aria-label={isDark ? '切换到浅色模式' : '切换到深色模式'}
+            className="fixed right-5 top-5 z-40 inline-flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-subtle hover:text-fg"
+          >
+            {isDark ? <Sun size={18} aria-hidden="true" /> : <Moon size={18} aria-hidden="true" />}
+          </button>
+        )}
 
         {showLogin && <Login onClose={() => setShowLogin(false)} />}
 
