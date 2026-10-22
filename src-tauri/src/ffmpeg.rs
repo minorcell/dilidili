@@ -1,9 +1,23 @@
+use crate::fs_utils::{replace_file, temp_suffix, TempFileGuard};
 use std::path::{Path, PathBuf};
 use tauri::Manager;
 use tokio::process::Command;
 
+// 进程内缓存已解析的 ffmpeg 路径，避免每条命令都重复探测
+static FFMPEG_PATH: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
 // 获取ffmpeg可执行文件路径
 fn get_ffmpeg_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    if let Some(path) = FFMPEG_PATH.get() {
+        return Ok(path.clone());
+    }
+
+    let path = resolve_ffmpeg_path(app_handle)?;
+    let _ = FFMPEG_PATH.set(path.clone());
+    Ok(path)
+}
+
+fn resolve_ffmpeg_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
     println!("开始查找ffmpeg可执行文件...");
     println!("当前工作目录: {:?}", std::env::current_dir().unwrap_or_default());
     
@@ -78,34 +92,66 @@ pub async fn merge_video_audio(
     let ffmpeg_path = get_ffmpeg_path(&app_handle)?;
     
     // 检查输入文件是否存在
-    if !Path::new(&video_path).exists() {
-        return Err(format!("视频文件不存在: {}", video_path));
-    }
-    if !Path::new(&audio_path).exists() {
-        return Err(format!("音频文件不存在: {}", audio_path));
-    }
+    ensure_file_exists(&video_path, "视频文件").await?;
+    ensure_file_exists(&audio_path, "音频文件").await?;
     
     // 确保输出目录存在
-    if let Some(parent) = Path::new(&output_path).parent() {
+    let output = Path::new(&output_path);
+    if let Some(parent) = output.parent() {
         tokio::fs::create_dir_all(parent)
             .await
             .map_err(|e| format!("创建输出目录失败: {}", e))?;
     }
     
-    // 先尝试直接复制音频流（B站DASH音频本身已是AAC，无需重新编码）。
-    // 复制模式远快于重新编码；若封装不兼容再回退到AAC转码。
-    let output = run_merge(&ffmpeg_path, &video_path, &audio_path, &output_path, true).await?;
+    // 先写入同目录下的临时文件，成功后再替换目标文件。
+    // 这样即使 ffmpeg 在探测输入阶段就失败（从未创建输出），
+    // 也不会误删用户已存在的同名文件。
+    let temp_output = temp_output_path(output);
+    let mut cleanup = TempFileGuard::new(&temp_output);
+    let temp_output_arg = temp_output.to_string_lossy().to_string();
 
-    if !output.status.success() {
-        println!("⚠️ 音频流复制失败，回退到AAC转码");
-        let output = run_merge(&ffmpeg_path, &video_path, &audio_path, &output_path, false).await?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
+    // 先尝试直接复制音频流（B站DASH音频本身已是AAC，无需重新编码）。
+    // 复制模式远快于重新编码；只有封装不兼容时才回退到AAC转码。
+    let first = run_merge(
+        &ffmpeg_path,
+        &video_path,
+        &audio_path,
+        &temp_output_arg,
+        true,
+    )
+    .await?;
+
+    if !first.status.success() {
+        let first_stderr = String::from_utf8_lossy(&first.stderr).to_string();
+
+        // 磁盘写满、权限、输入损坏等错误重试也没有意义，直接返回首次的 stderr
+        if !is_container_mismatch(&first_stderr) {
+            println!("ffmpeg错误输出: {}", first_stderr);
+            return Err(format!("ffmpeg合并失败: {}", first_stderr));
+        }
+
+        println!("⚠️ 音频流复制不兼容，回退到AAC转码: {}", first_stderr);
+        let second = run_merge(
+            &ffmpeg_path,
+            &video_path,
+            &audio_path,
+            &temp_output_arg,
+            false,
+        )
+        .await?;
+
+        if !second.status.success() {
+            let stderr = String::from_utf8_lossy(&second.stderr);
             println!("ffmpeg错误输出: {}", stderr);
-            let _ = tokio::fs::remove_file(&output_path).await;
-            return Err(format!("ffmpeg合并失败: {}", stderr));
+            return Err(format!(
+                "ffmpeg合并失败: {}（音频流复制尝试失败原因: {}）",
+                stderr, first_stderr
+            ));
         }
     }
+
+    replace_file(&temp_output, output).await?;
+    cleanup.disarm();
 
     println!("✅ 音视频合并成功");
     println!("输出文件: {}", output_path);
@@ -115,6 +161,34 @@ pub async fn merge_video_audio(
     let _ = tokio::fs::remove_file(&audio_path).await;
 
     Ok(output_path)
+}
+
+// 同目录下的临时输出文件。保留 .mp4 扩展名，让 ffmpeg 能推断封装格式。
+fn temp_output_path(output: &Path) -> PathBuf {
+    let stem = output.file_stem().unwrap_or_default().to_string_lossy();
+    output.with_file_name(format!(".{}.{}.part.mp4", stem, temp_suffix()))
+}
+
+// 判断失败原因是否属于封装/编码不兼容（值得用转码重试）
+fn is_container_mismatch(stderr: &str) -> bool {
+    [
+        "Could not find tag for codec",
+        "not currently supported in container",
+        "Unsupported codec",
+    ]
+    .iter()
+    .any(|hint| stderr.contains(hint))
+}
+
+// 输入文件检查：保留原始 I/O 错误，只有 NotFound 才报告“不存在”
+async fn ensure_file_exists(path: &str, label: &str) -> Result<(), String> {
+    match tokio::fs::metadata(path).await {
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err(format!("{}不存在: {}", label, path))
+        }
+        Err(e) => Err(format!("无法访问{} {}: {}", label, path, e)),
+    }
 }
 
 // 构建合并命令。`copy_audio` 为 true 时直接复制音频流，否则转码为 AAC。
@@ -176,7 +250,7 @@ pub async fn convert_video_format(
     
     let ffmpeg_path = get_ffmpeg_path(&app_handle)?;
     
-    if !Path::new(&input_path).exists() {
+    if !tokio::fs::try_exists(&input_path).await.unwrap_or(false) {
         return Err(format!("输入文件不存在: {}", input_path));
     }
     
@@ -255,7 +329,7 @@ pub async fn extract_audio(
     
     let ffmpeg_path = get_ffmpeg_path(&app_handle)?;
     
-    if !Path::new(&video_path).exists() {
+    if !tokio::fs::try_exists(&video_path).await.unwrap_or(false) {
         return Err(format!("视频文件不存在: {}", video_path));
     }
     
@@ -326,7 +400,7 @@ pub async fn get_local_video_info(
 ) -> Result<String, String> {
     let ffmpeg_path = get_ffmpeg_path(&app_handle)?;
     
-    if !Path::new(&video_path).exists() {
+    if !tokio::fs::try_exists(&video_path).await.unwrap_or(false) {
         return Err(format!("视频文件不存在: {}", video_path));
     }
     

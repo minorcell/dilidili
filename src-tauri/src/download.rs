@@ -1,7 +1,7 @@
+use crate::fs_utils::{replace_file, temp_suffix, TempFileGuard, TempFileSet};
 use crate::types::*;
 use std::path::Path;
 use std::time::Duration;
-use tauri::Manager;
 use tokio::io::AsyncWriteExt;
 
 // 用户代理
@@ -35,6 +35,9 @@ fn stream_request(
 // 旧实现使用 `response.bytes()` 把整个视频/音频读进内存后再写盘，
 // 大文件会造成明显的内存峰值和界面卡顿。这里改为边收边写，
 // 内存占用只与缓冲区大小相关。
+//
+// 文件在下载过程中由 `TempFileGuard` 守护：任何错误（包括 flush/shutdown）
+// 或 future 被取消时都会删除未完成的文件。
 async fn download_stream_to_file(
     client: &reqwest::Client,
     url: &str,
@@ -63,17 +66,12 @@ async fn download_stream_to_file(
         return Err(format!("{}下载失败: {} - {}", label, status, error_text));
     }
 
-    // 优先使用服务端返回的文件大小预分配空间，减少写入过程中的碎片
-    let expected_size = response.content_length();
-
     let file = tokio::fs::File::create(path)
         .await
         .map_err(|e| format!("创建{}文件失败: {}", label, e))?;
 
-    if let Some(size) = expected_size {
-        // 预分配失败不影响正常下载
-        let _ = file.set_len(size).await;
-    }
+    // 创建成功后立刻交给守卫，后续任何失败分支都会清理
+    let mut cleanup = TempFileGuard::new(path);
 
     let mut writer = tokio::io::BufWriter::with_capacity(WRITE_BUFFER_SIZE, file);
     let mut downloaded: u64 = 0;
@@ -81,19 +79,14 @@ async fn download_stream_to_file(
     loop {
         match response.chunk().await {
             Ok(Some(chunk)) => {
-                if let Err(e) = writer.write_all(&chunk).await {
-                    drop(writer);
-                    let _ = tokio::fs::remove_file(path).await;
-                    return Err(format!("写入{}文件失败: {}", label, e));
-                }
+                writer
+                    .write_all(&chunk)
+                    .await
+                    .map_err(|e| format!("写入{}文件失败: {}", label, e))?;
                 downloaded += chunk.len() as u64;
             }
             Ok(None) => break,
-            Err(e) => {
-                drop(writer);
-                let _ = tokio::fs::remove_file(path).await;
-                return Err(format!("读取{}内容失败: {}", label, e));
-            }
+            Err(e) => return Err(format!("读取{}内容失败: {}", label, e)),
         }
     }
 
@@ -102,18 +95,12 @@ async fn download_stream_to_file(
         .await
         .map_err(|e| format!("写入{}文件失败: {}", label, e))?;
 
-    // 若实际大小和预分配大小不一致，截断到真实长度
-    if let Some(size) = expected_size {
-        if size != downloaded {
-            let file = writer.get_mut();
-            let _ = file.set_len(downloaded).await;
-        }
-    }
-
     writer
         .shutdown()
         .await
         .map_err(|e| format!("关闭{}文件失败: {}", label, e))?;
+
+    cleanup.disarm();
 
     println!("✅ {}下载完成，共 {} bytes", label, downloaded);
     Ok(downloaded)
@@ -132,12 +119,8 @@ pub async fn download_video(
     println!("视频标题: {}", video_data.title);
     println!("视频质量: {}", video_stream.description);
 
-    // 创建下载目录
-    let downloads_dir = app_handle
-        .path()
-        .download_dir()
-        .map_err(|e| e.to_string())?
-        .join("DILIDILI");
+    // 创建下载目录：优先使用设置页保存的目录，默认使用系统下载目录
+    let downloads_dir = crate::settings::resolve_download_dir(&app_handle)?;
 
     tokio::fs::create_dir_all(&downloads_dir)
         .await
@@ -156,9 +139,14 @@ pub async fn download_video(
         })
         .collect::<String>();
 
-    let video_path = downloads_dir.join(format!("{}_video.mp4", safe_title));
-    let audio_path = downloads_dir.join(format!("{}_audio.mp3", safe_title));
+    // 临时文件名带本次调用的唯一后缀，避免并发下载同一标题时互相删除对方的文件
+    let temp_id = temp_suffix();
+    let video_temp = downloads_dir.join(format!("{}_video_{}.mp4", safe_title, temp_id));
+    let audio_temp = downloads_dir.join(format!("{}_audio_{}.m4a", safe_title, temp_id));
     let final_path = downloads_dir.join(format!("{}.mp4", safe_title));
+
+    // 无论成功、失败还是提前返回，都不在下载目录留下本次调用的临时文件
+    let _temp_cleanup = TempFileSet::new(vec![video_temp.clone(), audio_temp.clone()]);
 
     let video_url = video_stream
         .url
@@ -176,114 +164,121 @@ pub async fn download_video(
         .build()
         .map_err(|e| e.to_string())?;
 
-    // 视频流和音频流互不依赖，并发下载可以显著缩短总耗时。
-    // 使用 join! 而不是 try_join!，保证一方失败时另一方也能完整收敛，
-    // 避免留下写了一半的临时文件。
     let referer = format!("https://www.bilibili.com/video/{}", video_data.bvid);
 
-    let video_fut = download_stream_to_file(
+    // 视频流和音频流互不依赖，并发下载可以显著缩短总耗时。
+    let mut video_fut = Box::pin(download_stream_to_file(
         &client,
         video_url,
         &cookies,
         &referer,
-        &video_path,
+        &video_temp,
         "视频流",
-    );
+    ));
 
-    let audio_fut = async {
-        match audio_url {
-            Some(url) => download_stream_to_file(
-                &client,
-                url,
-                &cookies,
-                &referer,
-                &audio_path,
-                "音频流",
-            )
-            .await
-            .map(Some),
-            None => {
-                println!("⚠️ 音频流URL为空，跳过音频下载");
-                Ok(None)
+    let mut audio_fut = match audio_url {
+        Some(url) => Some(Box::pin(download_stream_to_file(
+            &client,
+            url,
+            &cookies,
+            &referer,
+            &audio_temp,
+            "音频流",
+        ))),
+        None => {
+            println!("⚠️ 音频流URL为空，跳过音频下载");
+            None
+        }
+    };
+
+    // 只等待先结束的一方：任一条流失败时立刻处理，而不是像 join! 那样
+    // 等另一条流完整下载结束。被放弃的 future 会在 drop 时删除半成品文件。
+    let mut video_done: Option<Result<u64, String>> = None;
+    let mut audio_done: Option<Result<u64, String>> = None;
+
+    match audio_fut.as_mut() {
+        Some(audio) => {
+            tokio::select! {
+                result = &mut video_fut => video_done = Some(result),
+                result = audio => audio_done = Some(result),
             }
         }
-    };
-
-    let (video_result, audio_result) = tokio::join!(video_fut, audio_fut);
-
-    if let Err(e) = video_result {
-        let _ = tokio::fs::remove_file(&audio_path).await;
-        return Err(e);
+        None => video_done = Some((&mut video_fut).await),
     }
 
-    let audio_downloaded = match audio_result {
-        Ok(downloaded) => downloaded.is_some(),
-        Err(e) => {
-            // 音频失败时清理可能残留的半成品，避免污染下载目录
-            let _ = tokio::fs::remove_file(&audio_path).await;
-            return Err(e);
+    // 音频先失败且视频还没下完：音频单独存在没有意义，立即放弃视频流，
+    // 避免用户白等整条视频下载结束才看到错误。
+    if let Some(Err(e)) = &audio_done {
+        if video_done.is_none() {
+            println!("⚠️ 音频下载失败，中止视频下载: {}", e);
+            return Err(format!("音频下载失败: {}", e));
         }
+    }
+
+    // 视频先失败：同样不再等待音频
+    if matches!(video_done, Some(Err(_))) {
+        audio_fut = None;
+    }
+
+    let video_result = match video_done {
+        Some(result) => result,
+        None => (&mut video_fut).await,
     };
+
+    let audio_result: Option<Result<u64, String>> = match audio_done {
+        Some(result) => Some(result),
+        None => match audio_fut {
+            Some(audio) => Some(audio.await),
+            None => None,
+        },
+    };
+
+    if let Err(e) = video_result {
+        return Err(format!("视频下载失败: {}", e));
+    }
 
     println!("=== 处理下载完成的文件 ===");
 
-    let video_exists = tokio::fs::try_exists(&video_path).await.unwrap_or(false);
-    let audio_exists = audio_downloaded
-        && tokio::fs::try_exists(&audio_path).await.unwrap_or(false);
+    // 视频成功、音频失败时，视频本身是完整的，退化为“仅视频”而不是丢弃。
+    let audio_downloaded = match &audio_result {
+        Some(Ok(_)) => true,
+        Some(Err(e)) => {
+            println!("⚠️ 音频下载失败，仅保存视频: {}", e);
+            false
+        }
+        None => false,
+    };
 
-    println!(
-        "视频文件存在: {}, 音频文件存在: {}",
-        video_exists, audio_exists
-    );
-
-    // 如果只有视频流，直接重命名
-    if video_exists && !audio_exists {
-        println!("只有视频流，重命名为最终文件");
-        tokio::fs::rename(&video_path, &final_path)
-            .await
-            .map_err(|e| format!("重命名视频文件失败: {}", e))?;
-        return Ok(format!("视频下载完成: {:?}", final_path));
+    if !audio_downloaded {
+        replace_file(&video_temp, &final_path).await?;
+        let message = if audio_result.is_some() {
+            "视频下载完成（音频下载失败，已保存仅视频）"
+        } else {
+            "视频下载完成（无音频流）"
+        };
+        return Ok(format!("{}: {:?}", message, final_path));
     }
 
-    // 如果只有音频流，直接重命名
-    if !video_exists && audio_exists {
-        println!("只有音频流，重命名为最终文件");
-        let audio_final_path = downloads_dir.join(format!("{}.mp3", safe_title));
-        tokio::fs::rename(&audio_path, &audio_final_path)
-            .await
-            .map_err(|e| format!("重命名音频文件失败: {}", e))?;
-        return Ok(format!("音频下载完成: {:?}", audio_final_path));
-    }
+    println!("视频和音频都存在，开始FFmpeg合并");
 
-    // 如果都有，进行FFmpeg合并
-    if video_exists && audio_exists {
-        println!("视频和音频都存在，开始FFmpeg合并");
-
-        // 调用FFmpeg合并
-        match crate::ffmpeg::merge_video_audio(
-            app_handle.clone(),
-            video_path.to_string_lossy().to_string(),
-            audio_path.to_string_lossy().to_string(),
-            final_path.to_string_lossy().to_string(),
-        )
-        .await
-        {
-            Ok(_) => {
-                println!("✅ FFmpeg合并成功");
-                return Ok(format!("视频下载并合并完成: {:?}", final_path));
-            }
-            Err(e) => {
-                println!("⚠️ FFmpeg合并失败: {}，使用视频流", e);
-                // 合并失败，保留视频流
-                let _ = tokio::fs::remove_file(&audio_path).await;
-                tokio::fs::rename(&video_path, &final_path)
-                    .await
-                    .map_err(|e| format!("重命名合成文件失败: {}", e))?;
-                return Ok(format!("视频下载完成（合并失败，仅视频）: {:?}", final_path));
-            }
+    // 调用FFmpeg合并
+    match crate::ffmpeg::merge_video_audio(
+        app_handle.clone(),
+        video_temp.to_string_lossy().to_string(),
+        audio_temp.to_string_lossy().to_string(),
+        final_path.to_string_lossy().to_string(),
+    )
+    .await
+    {
+        Ok(_) => {
+            println!("✅ FFmpeg合并成功");
+            Ok(format!("视频下载并合并完成: {:?}", final_path))
+        }
+        Err(e) => {
+            println!("⚠️ FFmpeg合并失败: {}，保留视频流", e);
+            // 合并失败，保留完整的视频流
+            replace_file(&video_temp, &final_path).await?;
+            Ok(format!("视频下载完成（合并失败，仅视频）: {:?}", final_path))
         }
     }
-
-    // 如果都不存在
-    Err("下载失败：没有成功下载任何文件".to_string())
 }

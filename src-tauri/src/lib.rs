@@ -5,6 +5,8 @@ mod download;
 mod storage;
 mod ffmpeg;
 mod export;
+mod settings;
+mod fs_utils;
 
 use auth::*;
 use video::*;
@@ -12,6 +14,7 @@ use download::*;
 use storage::*;
 use ffmpeg::*;
 use export::*;
+use settings::*;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -24,6 +27,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             get_login_qr_code,
@@ -40,7 +44,9 @@ pub fn run() {
             convert_video_format,
             extract_audio,
             get_local_video_info,
-            select_export_folder,
+            get_download_settings,
+            set_download_dir,
+            select_download_folder,
             export_file_to_folder,
             batch_export_files,
             open_folder,

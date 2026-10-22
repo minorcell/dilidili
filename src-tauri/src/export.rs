@@ -1,16 +1,4 @@
 use std::path::Path;
-use tauri::Manager;
-
-// 打开文件夹选择器
-#[tauri::command]
-pub async fn select_export_folder(app_handle: tauri::AppHandle) -> Result<String, String> {
-    // 获取默认下载目录
-    let downloads_dir = app_handle.path().download_dir()
-        .map_err(|e| e.to_string())?;
-    
-    // 返回下载目录路径供前端使用
-    Ok(downloads_dir.to_string_lossy().to_string())
-}
 
 // 复制文件到指定文件夹
 #[tauri::command]
@@ -24,9 +12,7 @@ pub async fn export_file_to_folder(
     println!("目标文件夹: {}", target_folder);
     
     let source = Path::new(&source_path);
-    tokio::fs::metadata(source)
-        .await
-        .map_err(|_| format!("源文件不存在: {}", source_path))?;
+    file_metadata(source, "源文件").await?;
 
     // 使用异步文件系统操作，复制大文件时不会阻塞异步运行时
     let target_dir = Path::new(&target_folder);
@@ -116,7 +102,7 @@ pub async fn batch_export_files(
 pub async fn open_folder(folder_path: String) -> Result<(), String> {
     let path = Path::new(&folder_path);
     
-    if !path.exists() {
+    if !tokio::fs::try_exists(path).await.unwrap_or(false) {
         return Err(format!("文件夹不存在: {}", folder_path));
     }
     
@@ -151,9 +137,7 @@ pub async fn open_folder(folder_path: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn get_file_info(file_path: String) -> Result<FileInfo, String> {
     let path = Path::new(&file_path);
-    let metadata = tokio::fs::metadata(path)
-        .await
-        .map_err(|_| format!("文件不存在: {}", file_path))?;
+    let metadata = file_metadata(path, "文件").await?;
     
     let file_info = FileInfo {
         path: file_path.clone(),
@@ -167,6 +151,17 @@ pub async fn get_file_info(file_path: String) -> Result<FileInfo, String> {
     };
     
     Ok(file_info)
+}
+
+// 读取文件元数据：只把 NotFound 报告为“不存在”，其余 I/O 错误保留原始原因
+async fn file_metadata(path: &Path, label: &str) -> Result<std::fs::Metadata, String> {
+    match tokio::fs::metadata(path).await {
+        Ok(metadata) => Ok(metadata),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err(format!("{}不存在: {}", label, path.display()))
+        }
+        Err(e) => Err(format!("无法读取{}信息 {}: {}", label, path.display(), e)),
+    }
 }
 
 // 文件信息结构
