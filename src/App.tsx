@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
+  Activity,
   Download,
-  FlaskConical,
   QrCode,
+  Settings as SettingsIcon,
   ShieldCheck,
   Sparkles,
-  UserRound,
   Zap,
 } from 'lucide-react';
 import './App.css';
@@ -26,23 +26,23 @@ type Page = 'download' | 'test' | 'settings';
 const FEATURES: { icon: LucideIcon; title: string; description: string }[] = [
   {
     icon: Zap,
-    title: '最高 4K 清晰度',
-    description: '登录后可获取大会员专属的超清视频流。',
+    title: '最高 4K 画质',
+    description: '登录后可下载大会员专属的 4K 超清画质。',
   },
   {
     icon: Download,
-    title: '音视频自动合并',
-    description: '内置 FFmpeg，下载完成后自动合并为完整 MP4。',
+    title: '下载完就能看',
+    description: '画面和声音自动合并成一个完整视频，不用再手动处理。',
   },
   {
     icon: Sparkles,
-    title: '转码与提取音频',
-    description: '一键导出、转换为 AVI/MKV 或提取 MP3。',
+    title: '转格式与导出音频',
+    description: '需要时可以把视频转换成其他格式，或单独导出音频。',
   },
   {
     icon: ShieldCheck,
     title: '数据只留在本机',
-    description: 'Cookie 与下载记录均保存在本地。',
+    description: '账号信息和下载记录只保存在你的电脑上。',
   },
 ];
 
@@ -114,7 +114,7 @@ function Welcome() {
             </span>
           </h1>
           <p className="mt-4 max-w-md text-[15px] leading-relaxed text-muted">
-            支持最高 4K 清晰度，自动合并音视频流，并可直接导出、转码或提取音频。
+            最高支持 4K 画质；下载完就是能直接播放的完整视频，也能单独导出音频。
           </p>
 
           <ul className="mt-7 grid gap-x-7 gap-y-5 sm:grid-cols-2">
@@ -140,7 +140,9 @@ function Welcome() {
               </span>
               <div>
                 <h2 className="text-base font-semibold text-fg">扫码登录</h2>
-                <p className="text-xs text-muted">使用哔哩哔哩手机 App 扫码即可开始下载</p>
+                <p className="text-xs text-muted">
+                  B 站要求登录后才能下载高清视频，用手机 App 扫码即可
+                </p>
               </div>
             </div>
             <QrLoginPanel />
@@ -155,6 +157,9 @@ function Welcome() {
 function App() {
   const { isLoggedIn, loadLoginData, loadSettings, downloads } = useAppStore();
   const [page, setPage] = useState<Page>('download');
+  const activeDownloads = downloads.filter(
+    (item) => item.status === 'pending' || item.status === 'downloading',
+  ).length;
 
   useSystemTheme();
 
@@ -185,23 +190,19 @@ function App() {
                 active={page === 'download'}
                 icon={Download}
                 onClick={() => setPage('download')}
-                badge={downloads.length || undefined}
+                badge={activeDownloads || undefined}
               >
                 下载
               </SideNavItem>
-              <SideNavItem
-                active={page === 'test'}
-                icon={FlaskConical}
-                onClick={() => setPage('test')}
-              >
-                测试
+              <SideNavItem active={page === 'test'} icon={Activity} onClick={() => setPage('test')}>
+                自检
               </SideNavItem>
               <SideNavItem
                 active={page === 'settings'}
-                icon={UserRound}
+                icon={SettingsIcon}
                 onClick={() => setPage('settings')}
               >
-                我的
+                设置
               </SideNavItem>
             </nav>
           </aside>

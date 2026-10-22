@@ -1,4 +1,4 @@
-import { CircleDashed, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Ban, CircleDashed, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { DownloadItem } from '../../types/bilibili';
 
@@ -9,7 +9,7 @@ const STATUS_MAP: Record<
   { label: string; className: string; icon: typeof CircleDashed; spin?: boolean }
 > = {
   pending: {
-    label: '等待中',
+    label: '排队中',
     className: 'bg-neutral-subtle text-muted',
     icon: CircleDashed,
   },
@@ -28,6 +28,11 @@ const STATUS_MAP: Record<
     label: '失败',
     className: 'bg-danger-subtle text-danger-fg',
     icon: XCircle,
+  },
+  cancelled: {
+    label: '已取消',
+    className: 'bg-neutral-subtle text-muted',
+    icon: Ban,
   },
 };
 

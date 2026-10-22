@@ -25,6 +25,7 @@ fn greet(name: &str) -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(DownloadCancellations::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
@@ -36,6 +37,7 @@ pub fn run() {
             get_video_info,
             get_video_streams,
             download_video,
+            cancel_download,
             test_stream_url,
             save_login_data,
             load_login_data,

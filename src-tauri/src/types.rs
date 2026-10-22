@@ -161,6 +161,14 @@ pub struct SimplifiedPlayUrlData {
     pub audio_streams: Vec<AudioStream>,
 }
 
+// 下载完成后的结果。has_audio 为 false 表示只保存了画面，
+// 前端据此提醒用户，而不是一律提示“下载成功”。
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DownloadResult {
+    pub file_path: String,
+    pub has_audio: bool,
+}
+
 // 存储的登录信息
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StoredLoginData {

@@ -3,6 +3,13 @@ use crate::types::*;
 // 用户代理
 const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36";
 
+// DASH 接口不返回文件大小，用带宽和时长估算一个供界面展示的“约 xx MB”
+fn estimate_size(bandwidth: Option<u32>, duration: u32) -> Option<u64> {
+    bandwidth
+        .map(|bits_per_second| (bits_per_second as u64).saturating_mul(duration as u64) / 8)
+        .filter(|size| *size > 0)
+}
+
 // 获取视频信息
 #[tauri::command]
 pub async fn get_video_info(video_id: String) -> Result<VideoData, String> {
@@ -106,7 +113,7 @@ pub async fn get_video_streams(video_id: String, cid: u64, cookies: String) -> R
                     format: "mp4".to_string(), // DASH通常是mp4
                     description: data.accept_description.get(description_index).cloned().unwrap_or_else(|| format!("质量 {}", dash_video.id)),
                     url: Some(dash_video.base_url.clone()),
-                    filesize: None, // DASH格式通常不提供文件大小
+                    filesize: estimate_size(dash_video.bandwidth, data.dash.duration),
                 });
             }
             
@@ -116,7 +123,7 @@ pub async fn get_video_streams(video_id: String, cid: u64, cookies: String) -> R
                     quality: dash_audio.id,
                     format: "m4a".to_string(), // DASH音频通常是m4a
                     url: Some(dash_audio.base_url.clone()),
-                    filesize: None,
+                    filesize: estimate_size(dash_audio.bandwidth, data.dash.duration),
                 });
             }
             
