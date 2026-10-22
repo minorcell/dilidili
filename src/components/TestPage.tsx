@@ -137,144 +137,148 @@ export default function TestPage() {
   const tauriReady = isTauriAvailable();
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-fg">测试</h1>
-        <p className="mt-1 text-sm text-muted">检查运行环境、登录状态与下载链路是否正常。</p>
-      </div>
+    <div className="custom-scrollbar h-full overflow-y-auto p-6">
+      <div className="mx-auto w-full max-w-5xl space-y-4">
+        <div data-tauri-drag-region>
+          <h1 className="pointer-events-none text-xl font-bold tracking-tight text-fg">测试</h1>
+          <p className="pointer-events-none mt-0.5 text-xs text-muted">
+            检查运行环境、登录状态与下载链路是否正常。
+          </p>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            <FlaskConical size={16} aria-hidden="true" />
-            测试操作
-          </CardTitle>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="primary" onClick={runDownloadTest} disabled={isRunning}>
-              {isRunning ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-                  运行中
-                </>
-              ) : (
-                <>
-                  <Play size={14} aria-hidden="true" />
-                  完整功能测试
-                </>
-              )}
-            </Button>
-            <Button onClick={runQuickTest}>
-              <Zap size={14} aria-hidden="true" />
-              快速检查
-            </Button>
-            <Button variant="ghost" onClick={clearTest} disabled={!testResult}>
-              <Trash2 size={14} aria-hidden="true" />
-              清除结果
-            </Button>
-          </div>
-        </CardHeader>
-      </Card>
-
-      <div className="grid items-start gap-6 lg:grid-cols-2">
-        {/* 系统状态 */}
         <Card>
           <CardHeader>
             <CardTitle>
-              <Activity size={16} aria-hidden="true" />
-              系统状态
+              <FlaskConical size={16} className="text-accent-fg" aria-hidden="true" />
+              测试操作
             </CardTitle>
-          </CardHeader>
-          <dl className="divide-y divide-line text-sm">
-            <div className="flex items-center justify-between gap-4 px-4 py-3">
-              <dt className="text-muted">运行环境</dt>
-              <dd className="flex items-center gap-1.5 font-medium text-fg">
-                {tauriReady ? (
-                  <CheckCircle2 size={14} className="text-success-fg" aria-hidden="true" />
+            <div className="flex flex-wrap gap-2">
+              <Button variant="primary" className="rounded-full" onClick={runDownloadTest} disabled={isRunning}>
+                {isRunning ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                    运行中
+                  </>
                 ) : (
-                  <XCircle size={14} className="text-danger-fg" aria-hidden="true" />
+                  <>
+                    <Play size={14} aria-hidden="true" />
+                    完整功能测试
+                  </>
                 )}
-                {tauriReady ? 'Tauri 桌面应用' : '浏览器环境'}
-              </dd>
+              </Button>
+              <Button className="rounded-full" onClick={runQuickTest}>
+                <Zap size={14} aria-hidden="true" />
+                快速检查
+              </Button>
+              <Button variant="ghost" className="rounded-full" onClick={clearTest} disabled={!testResult}>
+                <Trash2 size={14} aria-hidden="true" />
+                清除结果
+              </Button>
             </div>
-            <div className="flex items-center justify-between gap-4 px-4 py-3">
-              <dt className="text-muted">登录状态</dt>
-              <dd
-                className={cn(
-                  'flex items-center gap-1.5 font-medium',
-                  isLoggedIn ? 'text-success-fg' : 'text-muted',
-                )}
-              >
-                <span
-                  className={cn('h-2 w-2 rounded-full', isLoggedIn ? 'bg-success' : 'bg-muted')}
-                  aria-hidden="true"
-                />
-                {isLoggedIn ? '已登录' : '未登录'}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-4 px-4 py-3">
-              <dt className="text-muted">当前用户</dt>
-              <dd className="min-w-0 truncate font-medium text-fg">
-                {userProfile ? `${userProfile.name}（UID ${userProfile.mid}）` : '—'}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-4 px-4 py-3">
-              <dt className="text-muted">认证信息</dt>
-              <dd className="font-medium text-fg">
-                {cookies ? `已获取（${cookies.length} 字符）` : '未获取'}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-4 px-4 py-3">
-              <dt className="text-muted">下载队列</dt>
-              <dd className="font-medium text-fg">{downloads.length} 项任务</dd>
-            </div>
-          </dl>
+          </CardHeader>
         </Card>
 
-        {/* 测试结果 */}
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              <Terminal size={16} aria-hidden="true" />
-              测试输出
-            </CardTitle>
-          </CardHeader>
-          <CardBody>
-            <pre className="custom-scrollbar min-h-64 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-inset p-3 font-mono text-xs leading-relaxed text-fg">
-              {testResult ||
-                '点击「完整功能测试」或「快速检查」开始。\n\n完整功能测试 — 检测所有下载相关功能\n快速检查 — 仅检查基本环境状态'}
-            </pre>
-          </CardBody>
-        </Card>
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          {/* 系统状态 */}
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <Activity size={16} className="text-accent-fg" aria-hidden="true" />
+                系统状态
+              </CardTitle>
+            </CardHeader>
+            <dl className="divide-y divide-line-muted text-sm">
+              <div className="flex items-center justify-between gap-4 px-5 py-3">
+                <dt className="text-muted">运行环境</dt>
+                <dd className="flex items-center gap-1.5 font-medium text-fg">
+                  {tauriReady ? (
+                    <CheckCircle2 size={14} className="text-success-fg" aria-hidden="true" />
+                  ) : (
+                    <XCircle size={14} className="text-danger-fg" aria-hidden="true" />
+                  )}
+                  {tauriReady ? 'Tauri 桌面应用' : '浏览器环境'}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4 px-5 py-3">
+                <dt className="text-muted">登录状态</dt>
+                <dd
+                  className={cn(
+                    'flex items-center gap-1.5 font-medium',
+                    isLoggedIn ? 'text-success-fg' : 'text-muted',
+                  )}
+                >
+                  <span
+                    className={cn('h-2 w-2 rounded-full', isLoggedIn ? 'bg-success' : 'bg-muted')}
+                    aria-hidden="true"
+                  />
+                  {isLoggedIn ? '已登录' : '未登录'}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4 px-5 py-3">
+                <dt className="text-muted">当前用户</dt>
+                <dd className="min-w-0 truncate font-medium text-fg">
+                  {userProfile ? `${userProfile.name}（UID ${userProfile.mid}）` : '—'}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4 px-5 py-3">
+                <dt className="text-muted">认证信息</dt>
+                <dd className="font-medium text-fg">
+                  {cookies ? `已获取（${cookies.length} 字符）` : '未获取'}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4 px-5 py-3">
+                <dt className="text-muted">下载队列</dt>
+                <dd className="font-medium text-fg">{downloads.length} 项任务</dd>
+              </div>
+            </dl>
+          </Card>
+
+          {/* 测试结果 */}
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <Terminal size={16} className="text-accent-fg" aria-hidden="true" />
+                测试输出
+              </CardTitle>
+            </CardHeader>
+            <CardBody>
+              <pre className="custom-scrollbar min-h-64 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-inset p-3.5 font-mono text-xs leading-relaxed text-fg">
+                {testResult ||
+                  '点击「完整功能测试」或「快速检查」开始。\n\n完整功能测试 — 检测所有下载相关功能\n快速检查 — 仅检查基本环境状态'}
+              </pre>
+            </CardBody>
+          </Card>
+        </div>
+
+        {/* 下载队列详情 */}
+        {downloads.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                下载队列详情
+                <span className="font-normal text-muted">({downloads.length})</span>
+              </CardTitle>
+            </CardHeader>
+            <ul className="divide-y divide-line-muted">
+              {downloads.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex flex-wrap items-center justify-between gap-2 px-5 py-3"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-sm font-medium text-fg">{item.title}</span>
+                    <StatusLabel status={item.status} showIcon={false} />
+                  </div>
+                  <span className="text-xs text-muted">
+                    视频数据 {item.videoData ? '已获取' : '未获取'} · 清晰度{' '}
+                    {item.selectedQuality ? '已选择' : '未选择'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
       </div>
-
-      {/* 下载队列详情 */}
-      {downloads.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              下载队列详情
-              <span className="font-normal text-muted">({downloads.length})</span>
-            </CardTitle>
-          </CardHeader>
-          <ul className="divide-y divide-line">
-            {downloads.map((item) => (
-              <li
-                key={item.id}
-                className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate text-sm font-medium text-fg">{item.title}</span>
-                  <StatusLabel status={item.status} showIcon={false} />
-                </div>
-                <span className="text-xs text-muted">
-                  视频数据 {item.videoData ? '已获取' : '未获取'} · 清晰度{' '}
-                  {item.selectedQuality ? '已选择' : '未选择'}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
     </div>
   );
 }

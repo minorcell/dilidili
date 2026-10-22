@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    DILIDILI_lib::run()
+    dilidili_lib::run()
 }

@@ -64,12 +64,6 @@ pub struct VideoOwner {
     pub mid: u64,
 }
 
-impl VideoData {
-    pub fn author(&self) -> String {
-        self.owner_info.name.clone()
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VideoInfoResponse {
     pub code: i32,
@@ -255,9 +249,3 @@ pub struct UserInfoResponse {
     pub ttl: u32,
     pub data: UserInfoData,
 }
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DownloadProgress {
-    pub progress: f64,
-    pub message: String,
-} 

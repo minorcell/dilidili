@@ -1,17 +1,16 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import {
   CheckCircle2,
   Clock,
   Download,
-  ExternalLink,
   FileVideo,
   FolderOpen,
   Link2,
   Loader2,
   Music,
   RotateCw,
-  Settings as SettingsIcon,
   SlidersHorizontal,
   X,
   XCircle,
@@ -43,11 +42,12 @@ function formatDuration(totalSeconds: number): string {
   return minutes > 0 ? `${minutes} 分 ${seconds} 秒` : `${seconds} 秒`;
 }
 
-interface DownloaderProps {
-  onOpenSettings: () => void;
+interface DownloadProgressEvent {
+  downloadId: string;
+  progress: number;
 }
 
-export default function Downloader({ onOpenSettings }: DownloaderProps) {
+export default function Downloader() {
   const [videoUrl, setVideoUrl] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentVideoData, setCurrentVideoData] = useState<VideoData | null>(null);
@@ -62,7 +62,6 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
     setDownloadFilePath,
     isLoggedIn,
     cookies,
-    downloadDir,
   } = useAppStore();
   const { success, error, warning, info } = useMessage();
 
@@ -195,15 +194,25 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
       return;
     }
 
+    let unlisten: (() => void) | undefined;
+
     try {
       updateDownloadStatus(downloadItem.id, 'downloading');
       updateDownloadProgress(downloadItem.id, 0);
+
+      // 后端按已下载字节定期推送整体进度
+      unlisten = await listen<DownloadProgressEvent>('download-progress', (event) => {
+        if (event.payload.downloadId === downloadItem.id) {
+          updateDownloadProgress(downloadItem.id, Math.round(event.payload.progress));
+        }
+      });
 
       const result = await invoke<string>('download_video', {
         videoData: downloadItem.videoData,
         videoStream: downloadItem.selectedQuality.video,
         audioStream: downloadItem.selectedQuality.audio,
         cookies,
+        downloadId: downloadItem.id,
       });
 
       updateDownloadStatus(downloadItem.id, 'completed');
@@ -213,6 +222,8 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
     } catch (downloadError) {
       updateDownloadStatus(downloadItem.id, 'failed');
       error(`下载失败：${downloadError}`);
+    } finally {
+      unlisten?.();
     }
   };
 
@@ -303,25 +314,21 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-fg">下载</h1>
-        <p className="mt-1 text-sm text-muted">粘贴视频链接或 BV 号，选择清晰度后加入下载队列。</p>
+    <div className="flex h-full flex-col gap-4 p-6">
+      <div className="shrink-0" data-tauri-drag-region>
+        <h1 className="pointer-events-none text-xl font-bold tracking-tight text-fg">下载</h1>
+        <p className="pointer-events-none mt-0.5 text-xs text-muted">
+          粘贴视频链接或 BV 号，选择清晰度后加入下载队列。
+        </p>
       </div>
 
       {/* 视频链接输入区域 */}
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            <Link2 size={16} aria-hidden="true" />
-            添加下载任务
-          </CardTitle>
-        </CardHeader>
-        <CardBody className="space-y-3">
+      <Card className="shrink-0">
+        <CardBody className="space-y-3 p-5">
           <label htmlFor="video-url" className="block text-sm font-semibold text-fg">
             视频链接或 BV 号
           </label>
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2.5 sm:flex-row">
             <input
               id="video-url"
               type="text"
@@ -329,17 +336,19 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
               onChange={(event) => setVideoUrl(event.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="https://www.bilibili.com/video/BV... 或 BV1xx411c7mD"
-              className="h-8 flex-1 rounded-md border border-line bg-canvas px-3 font-mono text-sm text-fg outline-none transition-colors placeholder:font-sans placeholder:text-subtle-fg hover:border-muted focus:border-accent focus:ring-2 focus:ring-accent/30 disabled:opacity-60"
+              className="h-11 flex-1 rounded-full border border-transparent bg-inset px-5 font-mono text-sm text-fg outline-none transition-all placeholder:font-sans placeholder:text-subtle-fg hover:bg-neutral-subtle focus:border-accent focus:bg-canvas focus:ring-4 focus:ring-accent/10 disabled:opacity-60"
               disabled={isAnalyzing}
             />
             <Button
               variant="primary"
+              size="lg"
+              className="rounded-full px-7"
               onClick={handleAnalyzeVideo}
               disabled={isAnalyzing || !videoUrl.trim()}
             >
               {isAnalyzing ? (
                 <>
-                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                  <Loader2 size={15} className="animate-spin" aria-hidden="true" />
                   解析中
                 </>
               ) : (
@@ -353,110 +362,127 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
         </CardBody>
       </Card>
 
-      {/* 质量选择器 */}
+      {/* 质量选择弹窗 */}
       {showQualitySelector && currentVideoData && streamData && (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              <SlidersHorizontal size={16} aria-hidden="true" />
-              选择清晰度
-            </CardTitle>
-            <Button variant="ghost" size="sm" onClick={cancelQualitySelect}>
-              <X size={14} aria-hidden="true" />
-              取消
-            </Button>
-          </CardHeader>
-          <CardBody className="space-y-4">
-            <div className="flex gap-4">
-              <img
-                src={currentVideoData.pic}
-                alt={currentVideoData.title}
-                className="h-20 w-36 shrink-0 rounded-md border border-line object-cover"
-              />
-              <div className="min-w-0">
-                <h3 className="line-clamp-2 text-sm font-semibold text-fg">
-                  {currentVideoData.title}
-                </h3>
-                <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-muted">
-                  <dt>UP 主</dt>
-                  <dd className="truncate">{currentVideoData.owner_info?.name || '未知'}</dd>
-                  <dt>时长</dt>
-                  <dd>{formatDuration(currentVideoData.duration)}</dd>
-                  <dt>BV 号</dt>
-                  <dd className="truncate font-mono">{currentVideoData.bvid}</dd>
-                </dl>
-              </div>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-overlay-in"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              cancelQualitySelect();
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="quality-dialog-title"
+            className="w-full max-w-lg animate-dialog-in overflow-hidden rounded-2xl border border-line bg-canvas"
+          >
+            <div className="flex items-center justify-between border-b border-line-muted px-5 py-4">
+              <h2
+                id="quality-dialog-title"
+                className="flex items-center gap-2 text-base font-semibold text-fg"
+              >
+                <SlidersHorizontal size={17} className="text-accent-fg" aria-hidden="true" />
+                选择清晰度
+              </h2>
+              <button
+                type="button"
+                onClick={cancelQualitySelect}
+                aria-label="取消选择"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-inset hover:text-fg"
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="block text-sm font-semibold text-fg">视频清晰度</label>
-              <CustomSelect
-                options={streamData.video_streams.map((videoStream, index) => ({
-                  value: index,
-                  label: videoStream.description,
-                  description: videoStream.format ? `格式：${videoStream.format}` : undefined,
-                  filesize: videoStream.filesize,
-                }))}
-                onChange={(selectedIndex) => {
-                  const selectedVideo = streamData.video_streams[selectedIndex as number];
-                  const selectedAudio = streamData.audio_streams[0];
-                  handleQualitySelect(selectedVideo, selectedAudio);
-                }}
-                placeholder="请选择视频清晰度"
-              />
-              <p className="text-xs text-subtle-fg">选择后会自动加入下载队列，音频流将自动合并。</p>
+            <div className="space-y-5 p-5">
+              <div className="flex flex-col gap-4 sm:flex-row">
+                <img
+                  src={currentVideoData.pic}
+                  alt={currentVideoData.title}
+                  referrerPolicy="no-referrer"
+                  className="h-28 w-full shrink-0 rounded-xl border border-line-muted object-cover sm:h-24 sm:w-44"
+                />
+                <div className="min-w-0">
+                  <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug text-fg">
+                    {currentVideoData.title}
+                  </h3>
+                  <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs text-muted">
+                    <dt>UP 主</dt>
+                    <dd className="truncate font-medium text-fg">
+                      {currentVideoData.owner_info?.name || '未知'}
+                    </dd>
+                    <dt>时长</dt>
+                    <dd>{formatDuration(currentVideoData.duration)}</dd>
+                    <dt>BV 号</dt>
+                    <dd className="truncate font-mono">{currentVideoData.bvid}</dd>
+                  </dl>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-fg">视频清晰度</label>
+                <CustomSelect
+                  options={streamData.video_streams.map((videoStream, index) => ({
+                    value: index,
+                    label: videoStream.description,
+                    description: videoStream.format ? `格式：${videoStream.format}` : undefined,
+                    filesize: videoStream.filesize,
+                  }))}
+                  onChange={(selectedIndex) => {
+                    const selectedVideo = streamData.video_streams[selectedIndex as number];
+                    const selectedAudio = streamData.audio_streams[0];
+                    handleQualitySelect(selectedVideo, selectedAudio);
+                  }}
+                  placeholder="请选择视频清晰度"
+                />
+                <p className="text-xs text-subtle-fg">选择后会自动加入下载队列，音频流将自动合并。</p>
+              </div>
             </div>
-          </CardBody>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* 下载队列 */}
-      <Card>
-        <CardHeader>
+      <Card className="flex min-h-0 flex-1 flex-col">
+        <CardHeader className="shrink-0">
           <CardTitle>
-            <Download size={16} aria-hidden="true" />
+            <Download size={16} className="text-accent-fg" aria-hidden="true" />
             下载队列
             <span className="font-normal text-muted">({downloadQueue.length})</span>
           </CardTitle>
-          <div className="flex items-center gap-2">
-            <Button size="sm" onClick={onOpenSettings}>
-              <SettingsIcon size={14} aria-hidden="true" />
-              下载设置
-            </Button>
-            <Button size="sm" onClick={() => openFolder(downloadDir)} disabled={!downloadDir}>
-              <ExternalLink size={14} aria-hidden="true" />
-              打开目录
-            </Button>
-          </div>
         </CardHeader>
 
-        {downloadDir && (
-          <div className="flex items-center gap-2 border-b border-line bg-subtle px-4 py-2 text-xs text-muted">
-            <FolderOpen size={12} className="shrink-0" aria-hidden="true" />
-            <span className="truncate font-mono">{downloadDir}</span>
-          </div>
-        )}
-
         {downloadQueue.length === 0 ? (
-          <div className="px-4 py-12 text-center">
-            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-line bg-subtle text-muted">
-              <Download size={18} aria-hidden="true" />
+          <div className="flex flex-1 flex-col items-center justify-center px-5 py-10 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-subtle text-accent-fg">
+              <Download size={24} aria-hidden="true" />
             </div>
-            <p className="mt-3 text-sm font-semibold text-fg">暂无下载任务</p>
+            <p className="mt-4 text-sm font-semibold text-fg">暂无下载任务</p>
             <p className="mt-1 text-xs text-subtle-fg">在上方粘贴视频链接开始下载。</p>
           </div>
         ) : (
-          <ul className="divide-y divide-line">
+          <ul className="custom-scrollbar flex-1 divide-y divide-line-muted overflow-y-auto">
             {downloadQueue.map((item) => (
               <li
                 key={item.id}
-                className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start"
+                className="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-inset/60 sm:flex-row sm:items-center"
               >
-                <div className="flex min-w-0 flex-1 gap-3">
-                  <div className="mt-0.5 shrink-0">{renderStatusIcon(item.status)}</div>
+                <div className="flex min-w-0 flex-1 gap-3.5">
+                  {item.videoData?.pic && (
+                    <img
+                      src={item.videoData.pic}
+                      alt=""
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                      className="hidden h-[63px] w-[112px] shrink-0 rounded-lg border border-line-muted object-cover sm:block"
+                    />
+                  )}
 
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
+                      <span className="shrink-0">{renderStatusIcon(item.status)}</span>
                       <h3 className="truncate text-sm font-semibold text-fg">{item.title}</h3>
                       <StatusLabel status={item.status} />
                     </div>
@@ -467,21 +493,21 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
                     </p>
 
                     {(item.status === 'downloading' || item.progress > 0) && (
-                      <div className="mt-2 flex items-center gap-2">
+                      <div className="mt-2.5 flex items-center gap-2.5">
                         <div className="h-2 flex-1 overflow-hidden rounded-full bg-neutral-subtle">
                           <div
-                            className="h-full rounded-full bg-accent transition-[width] duration-300"
+                            className="h-full rounded-full bg-gradient-to-r from-[#fb7299] to-[#ff9db9] transition-[width] duration-300"
                             style={{ width: `${Math.min(100, Math.max(0, item.progress))}%` }}
                           />
                         </div>
-                        <span className="w-10 text-right text-xs tabular-nums text-muted">
+                        <span className="w-10 text-right text-xs font-medium tabular-nums text-accent-fg">
                           {item.progress}%
                         </span>
                       </div>
                     )}
 
                     {item.status === 'completed' && item.filePath && (
-                      <div className="mt-2 flex flex-wrap gap-2">
+                      <div className="mt-2.5 flex flex-wrap gap-2">
                         <Button
                           size="sm"
                           onClick={() => openFolder(parentDirectory(item.filePath!))}
@@ -501,16 +527,19 @@ export default function Downloader({ onOpenSettings }: DownloaderProps) {
                     )}
 
                     {item.status === 'completed' && !item.filePath && (
-                      <p className="mt-2 text-xs text-subtle-fg">
-                        文件已保存到下载目录{downloadDir ? `：${downloadDir}` : '。'}
-                      </p>
+                      <p className="mt-2 text-xs text-subtle-fg">文件已保存到下载目录。</p>
                     )}
                   </div>
                 </div>
 
                 <div className="flex shrink-0 items-center justify-end gap-2">
                   {item.status === 'pending' && (
-                    <Button size="sm" variant="primary" onClick={() => startDownload(item)}>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      className="rounded-full px-4"
+                      onClick={() => startDownload(item)}
+                    >
                       开始下载
                     </Button>
                   )}

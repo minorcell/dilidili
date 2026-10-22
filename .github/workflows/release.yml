@@ -1,0 +1,137 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要重新构建的 tag（例如 v0.5.0）'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    name: Build macOS DMG
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          VERSION="${TAG#v}"
+          CARGO_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n 1)"
+          if [ "$VERSION" != "$CARGO_VERSION" ]; then
+            echo "tag 版本 $VERSION 与 Cargo.toml 中的 $CARGO_VERSION 不一致"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare FFmpeg
+        run: |
+          mkdir -p resources "$RUNNER_TEMP/ffmpeg-static"
+          cd "$RUNNER_TEMP/ffmpeg-static"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund ffmpeg-static
+          cp node_modules/ffmpeg-static/ffmpeg "$GITHUB_WORKSPACE/resources/ffmpeg"
+          chmod +x "$GITHUB_WORKSPACE/resources/ffmpeg"
+          "$GITHUB_WORKSPACE/resources/ffmpeg" -version | head -n 1
+
+      - name: Build DMG
+        run: pnpm tauri build --bundles dmg
+
+      - name: Prepare release asset
+        id: asset
+        run: |
+          SRC="$(find src-tauri/target -path '*bundle/dmg/*.dmg' -print -quit)"
+          if [ -z "$SRC" ]; then
+            echo "未找到 DMG 产物"
+            exit 1
+          fi
+          ASSET="DILIDILI-${{ steps.version.outputs.version }}.dmg"
+          cp "$SRC" "$ASSET"
+          echo "path=$ASSET" >> "$GITHUB_OUTPUT"
+          shasum -a 256 "$ASSET"
+
+      - name: Upload asset to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ steps.version.outputs.tag }}" "${{ steps.asset.outputs.path }}" --clobber
+
+      - name: Update Cask in repository
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          ASSET: ${{ steps.asset.outputs.path }}
+        run: |
+          git fetch origin main
+          git checkout -B cask-update origin/main
+          ./script/update-cask.sh "$VERSION" "$ASSET"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/dilidili.rb
+          if git diff --cached --quiet; then
+            echo "Cask 已是最新，无需提交"
+          else
+            git commit -m "chore(cask): 更新 Homebrew Cask 到 ${VERSION}"
+            git push origin cask-update:main
+          fi
+
+      - name: Update Homebrew tap
+        if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/minorcell/homebrew-tap.git" "$RUNNER_TEMP/homebrew-tap"
+          mkdir -p "$RUNNER_TEMP/homebrew-tap/Casks"
+          cp Casks/dilidili.rb "$RUNNER_TEMP/homebrew-tap/Casks/dilidili.rb"
+          cd "$RUNNER_TEMP/homebrew-tap"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/dilidili.rb
+          if git diff --cached --quiet; then
+            echo "Homebrew tap 已是最新"
+          else
+            git commit -m "dilidili ${VERSION}"
+            git push
+          fi

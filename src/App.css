@@ -4,97 +4,113 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ------------------------------------------------------------------ */
-/* 设计令牌：参考 GitHub Primer 的色板与排版                            */
+/* 设计令牌：哔哩哔哩品牌色系                                           */
+/* 品牌粉 #FB7299 · 交互蓝 #00AEEC · 中性灰阶                          */
 /* ------------------------------------------------------------------ */
 
 :root {
   color-scheme: light;
 
-  --canvas-default: #ffffff;
-  --canvas-subtle: #f6f8fa;
-  --canvas-inset: #f6f8fa;
+  --canvas-default: #fbfbf9;
+  --canvas-subtle: #fbfbf9;
+  --canvas-inset: #f2f1ed;
 
-  --border-default: #d0d7de;
-  --border-muted: #d8dee4;
+  --border-default: #e6e5e0;
+  --border-muted: #eeede8;
 
-  --fg-default: #1f2328;
-  --fg-muted: #59636e;
-  --fg-subtle: #6e7781;
+  --fg-default: #18191c;
+  --fg-muted: #61666d;
+  --fg-subtle: #9499a0;
 
-  --accent-fg: #0969da;
-  --accent-emphasis: #0969da;
-  --accent-subtle: #ddf4ff;
+  --brand-pink: #fb7299;
+  --brand-blue: #00aeec;
 
-  --success-fg: #1a7f37;
-  --success-emphasis: #1f883d;
-  --success-subtle: #dafbe1;
+  --accent-fg: #fb7299;
+  --accent-emphasis: #fb7299;
+  --accent-subtle: #fff0f4;
 
-  --attention-fg: #9a6700;
-  --attention-subtle: #fff8c5;
+  --success-fg: #14a44d;
+  --success-emphasis: #2ac864;
+  --success-subtle: #eafaf0;
 
-  --danger-fg: #d1242f;
-  --danger-emphasis: #cf222e;
-  --danger-subtle: #ffebe9;
+  --attention-fg: #d97e00;
+  --attention-subtle: #fff8e6;
 
-  --done-fg: #8250df;
-  --done-subtle: #fbefff;
+  --danger-fg: #f0435a;
+  --danger-emphasis: #f0435a;
+  --danger-subtle: #ffeff1;
 
-  --neutral-subtle: #eff2f5;
+  --done-fg: #ff6699;
+  --done-subtle: #fff0f5;
 
-  --header-bg: #24292f;
-  --header-fg: #ffffff;
-  --header-border: #30363d;
+  --neutral-subtle: #f0efeb;
 
-  --scrollbar-thumb: #d0d7de;
-  --scrollbar-thumb-hover: #afb8c1;
+  --header-bg: #fbfbf9;
+  --header-fg: #18191c;
+  --header-border: #e6e5e0;
+
+  --shadow-elevation: none;
+  --elevation-pop: none;
+
+  --scrollbar-thumb: #d8d6cf;
+  --scrollbar-thumb-hover: #bfbdb5;
 }
 
 .dark {
   color-scheme: dark;
 
-  --canvas-default: #0d1117;
-  --canvas-subtle: #161b22;
-  --canvas-inset: #010409;
+  --canvas-default: #1f2123;
+  --canvas-subtle: #17181a;
+  --canvas-inset: #26282a;
 
-  --border-default: #30363d;
-  --border-muted: #21262d;
+  --border-default: #2f3134;
+  --border-muted: #26282a;
 
-  --fg-default: #e6edf3;
-  --fg-muted: #8b949e;
-  --fg-subtle: #6e7681;
+  --fg-default: #f1f2f3;
+  --fg-muted: #9499a0;
+  --fg-subtle: #6d7278;
 
-  --accent-fg: #4493f8;
-  --accent-emphasis: #1f6feb;
-  --accent-subtle: #121d2f;
+  --brand-pink: #fb7299;
+  --brand-blue: #00aeec;
 
-  --success-fg: #3fb950;
-  --success-emphasis: #238636;
-  --success-subtle: #12261e;
+  --accent-fg: #ff85a8;
+  --accent-emphasis: #fb7299;
+  --accent-subtle: #2e2024;
 
-  --attention-fg: #d29922;
-  --attention-subtle: #272115;
+  --success-fg: #3ddc84;
+  --success-emphasis: #2ac864;
+  --success-subtle: #17281e;
 
-  --danger-fg: #f85149;
-  --danger-emphasis: #da3633;
-  --danger-subtle: #25171c;
+  --attention-fg: #f0b23c;
+  --attention-subtle: #2b2416;
 
-  --done-fg: #a371f7;
-  --done-subtle: #1f1633;
+  --danger-fg: #ff6b81;
+  --danger-emphasis: #f0435a;
+  --danger-subtle: #2e1b1f;
 
-  --neutral-subtle: #21262d;
+  --done-fg: #ff85a8;
+  --done-subtle: #2e2024;
 
-  --header-bg: #161b22;
-  --header-fg: #e6edf3;
-  --header-border: #30363d;
+  --neutral-subtle: #26282a;
 
-  --scrollbar-thumb: #484f58;
-  --scrollbar-thumb-hover: #6e7681;
+  --header-bg: #17181a;
+  --header-fg: #f1f2f3;
+  --header-border: #2f3134;
+
+  --shadow-elevation: none;
+  --elevation-pop: none;
+
+  --scrollbar-thumb: #3a3d41;
+  --scrollbar-thumb-hover: #4d5156;
 }
 
 @theme inline {
   --color-canvas: var(--canvas-default);
   --color-subtle: var(--canvas-subtle);
   --color-inset: var(--canvas-inset);
+
+  --color-brand: var(--brand-pink);
+  --color-brand-blue: var(--brand-blue);
 
   --color-line: var(--border-default);
   --color-line-muted: var(--border-muted);
@@ -129,9 +145,15 @@
   --color-header-fg: var(--header-fg);
   --color-header-line: var(--header-border);
 
+  --shadow-card: var(--shadow-elevation);
+  --shadow-pop: var(--elevation-pop);
+
+  --radius-card: 0.75rem;
+
   --font-sans:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji";
+    -apple-system, BlinkMacSystemFont, "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei",
+    "Segoe UI", "Noto Sans SC", Helvetica, Arial, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji";
   --font-mono:
     ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
@@ -143,9 +165,19 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html,
   body {
-    min-height: 100vh;
-    background-color: var(--canvas-default);
+    overflow: hidden;
+  }
+
+  body {
+    background-color: var(--canvas-subtle);
     color: var(--fg-default);
     font-size: 14px;
     line-height: 1.5;
@@ -153,7 +185,7 @@
 
   ::selection {
     background-color: var(--accent-subtle);
-    color: var(--fg-default);
+    color: var(--accent-fg);
   }
 
   /* 无障碍：统一的键盘焦点样式 */

@@ -31,7 +31,8 @@ print_error() {
 
 # 项目信息
 APP_NAME="DILIDILI"
-APP_VERSION="1.0.0"
+# 版本号与 Cargo.toml 保持一致，避免 DMG 命名与 Cask 版本不一致
+APP_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$(dirname "${BASH_SOURCE[0]}")/../src-tauri/Cargo.toml" | head -n 1)"
 BUNDLE_ID="com.minorcell.DILIDILI"
 DEVELOPER_TEAM=""  # 如果有开发者账号，填入 Team ID
 
@@ -188,11 +189,16 @@ eval $CREATE_DMG_CMD
 # 检查 DMG 是否创建成功
 if [ -f "$OUTPUT_DIR/${DMG_NAME}.dmg" ]; then
     print_success "DMG 文件创建成功: ${DMG_NAME}.dmg"
-    
+
     # 获取文件大小
     DMG_SIZE=$(du -h "$OUTPUT_DIR/${DMG_NAME}.dmg" | cut -f1)
     print_status "文件大小: $DMG_SIZE"
-    
+
+    # 计算校验值，用于更新 Homebrew Cask
+    DMG_SHA256=$(shasum -a 256 "$OUTPUT_DIR/${DMG_NAME}.dmg" | awk '{print $1}')
+    print_status "SHA256: $DMG_SHA256"
+    print_status "更新 Cask: ./script/update-cask.sh ${APP_VERSION} ${DMG_NAME}.dmg"
+
     # 显示文件路径
     DMG_FULL_PATH="$OUTPUT_DIR/${DMG_NAME}.dmg"
     print_status "完整路径: $DMG_FULL_PATH"

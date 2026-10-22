@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="140" y1="100" x2="884" y2="924" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FB7299" />
+      <stop offset="1" stop-color="#FF9DB9" />
+    </linearGradient>
+  </defs>
+
+  <!-- 品牌粉色圆角底 -->
+  <rect x="64" y="64" width="896" height="896" rx="210" fill="url(#bg)" />
+
+  <!-- 下载进度环：四分之三圈 -->
+  <circle
+    cx="512"
+    cy="512"
+    r="230"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-opacity="0.34"
+    stroke-width="60"
+    stroke-linecap="round"
+    stroke-dasharray="1084 1445"
+    transform="rotate(-90 512 512)"
+  />
+
+  <!-- 下载箭头 -->
+  <path d="M512 380v238" stroke="#FFFFFF" stroke-width="88" stroke-linecap="round" />
+  <path
+    d="M426 528l86 94 86-94"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="88"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
