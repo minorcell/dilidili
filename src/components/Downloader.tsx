@@ -11,6 +11,7 @@ import {
   Loader2,
   Music,
   RotateCw,
+  Settings as SettingsIcon,
   SlidersHorizontal,
   X,
   XCircle,
@@ -30,19 +31,28 @@ function extractFilePath(message: string): string | undefined {
   return match?.[1];
 }
 
+/** 获取文件所在目录，兼容 Windows 与 Unix 路径分隔符 */
+function parentDirectory(filePath: string): string {
+  const separatorIndex = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+  return separatorIndex > 0 ? filePath.slice(0, separatorIndex) : filePath;
+}
+
 function formatDuration(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return minutes > 0 ? `${minutes} 分 ${seconds} 秒` : `${seconds} 秒`;
 }
 
-export default function Downloader() {
+interface DownloaderProps {
+  onOpenSettings: () => void;
+}
+
+export default function Downloader({ onOpenSettings }: DownloaderProps) {
   const [videoUrl, setVideoUrl] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentVideoData, setCurrentVideoData] = useState<VideoData | null>(null);
   const [showQualitySelector, setShowQualitySelector] = useState(false);
   const [streamData, setStreamData] = useState<PlayUrlData | null>(null);
-  const [exportFolder, setExportFolder] = useState<string>('');
 
   const {
     downloads: downloadQueue,
@@ -52,6 +62,7 @@ export default function Downloader() {
     setDownloadFilePath,
     isLoggedIn,
     cookies,
+    downloadDir,
   } = useAppStore();
   const { success, error, warning, info } = useMessage();
 
@@ -212,45 +223,6 @@ export default function Downloader() {
     }
   };
 
-  // 选择导出文件夹
-  const selectExportFolder = async () => {
-    if (!isTauriAvailable()) {
-      warning('请在 Tauri 应用中使用此功能');
-      return;
-    }
-
-    try {
-      const folder = await invoke<string>('select_export_folder');
-      setExportFolder(folder);
-      success(`已选择导出文件夹：${folder}`);
-    } catch (selectError) {
-      error(`选择文件夹失败：${selectError}`);
-    }
-  };
-
-  // 导出文件到指定文件夹
-  const exportFileToFolder = async (filePath: string) => {
-    if (!exportFolder) {
-      warning('请先选择导出文件夹');
-      return;
-    }
-
-    if (!isTauriAvailable()) {
-      warning('请在 Tauri 应用中使用此功能');
-      return;
-    }
-
-    try {
-      const exportedPath = await invoke<string>('export_file_to_folder', {
-        sourcePath: filePath,
-        targetFolder: exportFolder,
-      });
-      success(`文件已导出：${exportedPath}`);
-    } catch (exportError) {
-      error(`导出失败：${exportError}`);
-    }
-  };
-
   // 转换视频格式
   const convertVideoFormat = async (filePath: string, format: string) => {
     if (!isTauriAvailable()) {
@@ -294,7 +266,7 @@ export default function Downloader() {
   // 打开文件夹
   const openFolder = async (folderPath: string) => {
     if (!folderPath) {
-      warning('请先选择导出文件夹');
+      warning('请先在设置中选择下载目录');
       return;
     }
 
@@ -447,21 +419,21 @@ export default function Downloader() {
             <span className="font-normal text-muted">({downloadQueue.length})</span>
           </CardTitle>
           <div className="flex items-center gap-2">
-            <Button size="sm" onClick={selectExportFolder}>
-              <FolderOpen size={14} aria-hidden="true" />
-              导出文件夹
+            <Button size="sm" onClick={onOpenSettings}>
+              <SettingsIcon size={14} aria-hidden="true" />
+              下载设置
             </Button>
-            <Button size="sm" onClick={() => openFolder(exportFolder)} disabled={!exportFolder}>
+            <Button size="sm" onClick={() => openFolder(downloadDir)} disabled={!downloadDir}>
               <ExternalLink size={14} aria-hidden="true" />
-              打开
+              打开目录
             </Button>
           </div>
         </CardHeader>
 
-        {exportFolder && (
+        {downloadDir && (
           <div className="flex items-center gap-2 border-b border-line bg-subtle px-4 py-2 text-xs text-muted">
             <FolderOpen size={12} className="shrink-0" aria-hidden="true" />
-            <span className="truncate font-mono">{exportFolder}</span>
+            <span className="truncate font-mono">{downloadDir}</span>
           </div>
         )}
 
@@ -510,9 +482,12 @@ export default function Downloader() {
 
                     {item.status === 'completed' && item.filePath && (
                       <div className="mt-2 flex flex-wrap gap-2">
-                        <Button size="sm" onClick={() => exportFileToFolder(item.filePath!)}>
-                          <Download size={12} aria-hidden="true" />
-                          导出
+                        <Button
+                          size="sm"
+                          onClick={() => openFolder(parentDirectory(item.filePath!))}
+                        >
+                          <FolderOpen size={12} aria-hidden="true" />
+                          打开文件夹
                         </Button>
                         <Button size="sm" onClick={() => convertVideoFormat(item.filePath!, 'avi')}>
                           <FileVideo size={12} aria-hidden="true" />
@@ -527,7 +502,7 @@ export default function Downloader() {
 
                     {item.status === 'completed' && !item.filePath && (
                       <p className="mt-2 text-xs text-subtle-fg">
-                        文件已保存到系统下载目录的 DILIDILI 文件夹。
+                        文件已保存到下载目录{downloadDir ? `：${downloadDir}` : '。'}
                       </p>
                     )}
                   </div>

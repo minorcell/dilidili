@@ -1,12 +1,19 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
-import type { UserProfile, DownloadItem, StoredLoginData } from '../types/bilibili';
+import type {
+    UserProfile,
+    DownloadItem,
+    StoredLoginData,
+    DownloadSettings,
+} from '../types/bilibili';
 
 interface AppState {
     isLoggedIn: boolean;
     userProfile: UserProfile | null;
     cookies: string;
     downloads: DownloadItem[];
+    downloadDir: string;
+    isDownloadDirDefault: boolean;
     setLoginStatus: (isLoggedIn: boolean, userProfile?: UserProfile, cookies?: string) => void;
     addDownloadItem: (item: DownloadItem) => void;
     updateDownloadProgress: (id: string, progress: number) => void;
@@ -15,6 +22,8 @@ interface AppState {
     logout: () => void;
     loadLoginData: () => Promise<void>;
     saveLoginData: () => Promise<void>;
+    loadSettings: () => Promise<void>;
+    setDownloadDir: (dir: string | null) => Promise<DownloadSettings>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -22,6 +31,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     userProfile: null,
     cookies: '',
     downloads: [],
+    downloadDir: '',
+    isDownloadDirDefault: true,
     setLoginStatus: async (isLoggedIn, userProfile, cookies) => {
         set({ isLoggedIn, userProfile, cookies: cookies || '' });
 
@@ -99,5 +110,25 @@ export const useAppStore = create<AppState>((set, get) => ({
                 console.error('保存登录数据失败:', error);
             }
         }
+    },
+    loadSettings: async () => {
+        try {
+            const settings = await invoke<DownloadSettings>('get_download_settings');
+            set({
+                downloadDir: settings.download_dir,
+                isDownloadDirDefault: settings.is_default
+            });
+        } catch (error) {
+            console.error('加载下载设置失败:', error);
+        }
+    },
+    setDownloadDir: async (dir) => {
+        // path 为 null 时恢复系统默认下载目录
+        const settings = await invoke<DownloadSettings>('set_download_dir', { path: dir });
+        set({
+            downloadDir: settings.download_dir,
+            isDownloadDirDefault: settings.is_default
+        });
+        return settings;
     }
-})); 
+}));

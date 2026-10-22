@@ -1,17 +1,5 @@
 use std::path::Path;
 use std::fs;
-use tauri::Manager;
-
-// 打开文件夹选择器
-#[tauri::command]
-pub async fn select_export_folder(app_handle: tauri::AppHandle) -> Result<String, String> {
-    // 获取默认下载目录
-    let downloads_dir = app_handle.path().download_dir()
-        .map_err(|e| e.to_string())?;
-    
-    // 返回下载目录路径供前端使用
-    Ok(downloads_dir.to_string_lossy().to_string())
-}
 
 // 复制文件到指定文件夹
 #[tauri::command]

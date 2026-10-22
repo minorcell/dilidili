@@ -1,7 +1,6 @@
 use crate::types::*;
 use std::io::Write;
 use std::fs;
-use tauri::Manager;
 
 // 用户代理
 const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36";
@@ -22,11 +21,9 @@ pub async fn download_video(
     println!("音频URL: {:?}", audio_stream.url);
     println!("Cookies长度: {}", cookies.len());
     
-    // 创建下载目录
-    let downloads_dir = app_handle.path().download_dir()
-        .map_err(|e| e.to_string())?
-        .join("DILIDILI");
-    
+    // 创建下载目录：优先使用设置页保存的目录，默认使用系统下载目录
+    let downloads_dir = crate::settings::resolve_download_dir(&app_handle)?;
+
     fs::create_dir_all(&downloads_dir).map_err(|e| e.to_string())?;
     
     // 安全的文件名

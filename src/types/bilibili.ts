@@ -105,6 +105,12 @@ export interface StoredLoginData {
     login_time: number;
 }
 
+// 应用设置
+export interface DownloadSettings {
+    download_dir: string;
+    is_default: boolean;
+}
+
 // FFmpeg和导出相关类型
 export interface FileInfo {
     path: string;

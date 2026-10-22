@@ -10,6 +10,7 @@ import {
   MonitorPlay,
   Moon,
   QrCode,
+  Settings as SettingsIcon,
   ShieldCheck,
   Sparkles,
   Sun,
@@ -19,6 +20,7 @@ import {
 import './App.css';
 import Downloader from './components/Downloader';
 import Login from './components/Login';
+import SettingsPage from './components/Settings';
 import TestPage from './components/TestPage';
 import UserProfile from './components/UserProfile';
 import Avatar from './components/ui/Avatar';
@@ -80,18 +82,20 @@ function NavTab({ active, icon: Icon, onClick, children }: NavTabProps) {
 }
 
 function App() {
-  const { isLoggedIn, userProfile, logout, loadLoginData } = useAppStore();
+  const { isLoggedIn, userProfile, logout, loadLoginData, loadSettings } = useAppStore();
   const [showLogin, setShowLogin] = useState(false);
   const [showTestPage, setShowTestPage] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const { isDark, toggleTheme } = useTheme();
 
-  // 应用启动时自动加载登录状态
+  // 应用启动时自动加载登录状态与下载设置
   useEffect(() => {
     loadLoginData();
-  }, [loadLoginData]);
+    loadSettings();
+  }, [loadLoginData, loadSettings]);
 
   // 点击菜单外部或按下 Esc 关闭用户菜单
   useEffect(() => {
@@ -129,6 +133,17 @@ function App() {
             </div>
 
             <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSettings(true)}
+                title="设置"
+                aria-label="打开设置"
+                aria-pressed={showSettings}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/15 text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <SettingsIcon size={16} aria-hidden="true" />
+              </button>
+
               <button
                 type="button"
                 onClick={toggleTheme}
@@ -241,13 +256,23 @@ function App() {
         {isLoggedIn && (
           <nav className="border-b border-line bg-canvas" aria-label="主导航">
             <div className="mx-auto flex w-full max-w-6xl items-center gap-1 px-4">
-              <NavTab active={!showTestPage} icon={Download} onClick={() => setShowTestPage(false)}>
+              <NavTab
+                active={!showTestPage && !showSettings}
+                icon={Download}
+                onClick={() => {
+                  setShowSettings(false);
+                  setShowTestPage(false);
+                }}
+              >
                 下载
               </NavTab>
               <NavTab
-                active={showTestPage}
+                active={showTestPage && !showSettings}
                 icon={FlaskConical}
-                onClick={() => setShowTestPage(true)}
+                onClick={() => {
+                  setShowSettings(false);
+                  setShowTestPage(true);
+                }}
               >
                 测试
               </NavTab>
@@ -256,10 +281,12 @@ function App() {
         )}
 
         <main className="flex-1">
-          {showTestPage ? (
+          {showSettings ? (
+            <SettingsPage onBack={() => setShowSettings(false)} />
+          ) : showTestPage ? (
             <TestPage />
           ) : isLoggedIn ? (
-            <Downloader />
+            <Downloader onOpenSettings={() => setShowSettings(true)} />
           ) : (
             <div className="mx-auto grid w-full max-w-5xl gap-10 px-4 py-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:gap-16 lg:py-20">
               <section>
