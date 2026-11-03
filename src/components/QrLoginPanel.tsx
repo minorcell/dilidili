@@ -32,7 +32,7 @@ export default function QrLoginPanel({ className, onSuccess }: QrLoginPanelProps
   const [statusMessage, setStatusMessage] = useState('');
   const [pollInterval, setPollInterval] = useState<number | null>(null);
 
-  const { setLoginStatus: setGlobalLoginStatus } = useAppStore();
+  const setGlobalLoginStatus = useAppStore((state) => state.setLoginStatus);
 
   // 挂载时自动获取二维码
   useEffect(() => {

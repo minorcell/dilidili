@@ -70,6 +70,15 @@ function writeHistory(downloads: DownloadItem[]) {
   }
 }
 
+/** 内存中的任务列表同样只保留最近的已完成记录，避免长时间使用后无限增长 */
+function trimCompleted(downloads: DownloadItem[]): DownloadItem[] {
+  const completed = downloads.filter((item) => item.status === 'completed');
+  if (completed.length <= HISTORY_LIMIT) return downloads;
+
+  const keep = new Set(completed.slice(-HISTORY_LIMIT).map((item) => item.id));
+  return downloads.filter((item) => item.status !== 'completed' || keep.has(item.id));
+}
+
 function readPreferences(): DownloadPreferences {
   if (typeof localStorage === 'undefined') return DEFAULT_PREFERENCES;
 
@@ -110,18 +119,19 @@ interface AppState {
   autoOpenFolder: boolean;
   setLoginStatus: (isLoggedIn: boolean, userProfile?: UserProfile, cookies?: string) => void;
   addDownloadItem: (item: DownloadItem) => void;
-  updateDownloadProgress: (id: string, progress: number) => void;
-  updateDownloadStatus: (
+  /** 一次写入进度和速度等实时数据，避免每个进度事件触发两次 store 更新 */
+  updateDownloadStats: (
     id: string,
-    status: 'pending' | 'downloading' | 'completed' | 'failed' | 'cancelled',
-  ) => void;
-  updateDownloadMetrics: (
-    id: string,
-    metrics: {
+    stats: {
+      progress?: number;
       downloadedBytes?: number;
       totalBytes?: number;
       speedBytesPerSecond?: number;
     },
+  ) => void;
+  updateDownloadStatus: (
+    id: string,
+    status: 'pending' | 'downloading' | 'completed' | 'failed' | 'cancelled',
   ) => void;
   completeDownload: (id: string, result: { filePath: string; audioMerged: boolean }) => void;
   removeDownloadItem: (id: string) => void;
@@ -159,31 +169,36 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       downloads: [...state.downloads, item],
     })),
-  updateDownloadProgress: (id, progress) =>
+  updateDownloadStats: (id, stats) =>
     set((state) => ({
-      downloads: state.downloads.map((item) => (item.id === id ? { ...item, progress } : item)),
+      downloads: state.downloads.map((item) => (item.id === id ? { ...item, ...stats } : item)),
     })),
   updateDownloadStatus: (id, status) =>
     set((state) => ({
       downloads: state.downloads.map((item) => (item.id === id ? { ...item, status } : item)),
     })),
-  updateDownloadMetrics: (id, metrics) =>
-    set((state) => ({
-      downloads: state.downloads.map((item) => (item.id === id ? { ...item, ...metrics } : item)),
-    })),
   completeDownload: (id, { filePath, audioMerged }) => {
     set((state) => ({
-      downloads: state.downloads.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status: 'completed',
-              progress: 100,
-              filePath,
-              audioMerged,
-              completedAt: Date.now(),
-            }
-          : item,
+      downloads: trimCompleted(
+        state.downloads.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                status: 'completed',
+                progress: 100,
+                filePath,
+                audioMerged,
+                completedAt: Date.now(),
+                // 成功合入声音后不再需要重试用的视频详情，及时释放内存；
+                // 没有声音的任务保留详情，供「重新下载」使用。
+                videoData: audioMerged ? undefined : item.videoData,
+                selectedQuality: audioMerged ? undefined : item.selectedQuality,
+                downloadedBytes: undefined,
+                totalBytes: undefined,
+                speedBytesPerSecond: undefined,
+              }
+            : item,
+        ),
       ),
     }));
 

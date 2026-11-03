@@ -1,8 +1,5 @@
 use crate::types::*;
 
-// 用户代理
-const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36";
-
 // DASH 接口不返回文件大小，用带宽和时长估算一个供界面展示的“约 xx MB”
 fn estimate_size(bandwidth: Option<u32>, duration: u32) -> Option<u64> {
     bandwidth
@@ -13,7 +10,7 @@ fn estimate_size(bandwidth: Option<u32>, duration: u32) -> Option<u64> {
 // 获取视频信息
 #[tauri::command]
 pub async fn get_video_info(video_id: String) -> Result<VideoData, String> {
-    let client = reqwest::Client::new();
+    let client = crate::http::client();
     let url = if video_id.starts_with("BV") {
         format!("https://api.bilibili.com/x/web-interface/view?bvid={}", video_id)
     } else if video_id.starts_with("av") {
@@ -24,7 +21,6 @@ pub async fn get_video_info(video_id: String) -> Result<VideoData, String> {
     };
 
     let res = client.get(&url)
-        .header("User-Agent", USER_AGENT)
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -58,7 +54,7 @@ pub async fn get_video_info(video_id: String) -> Result<VideoData, String> {
 // 获取视频流
 #[tauri::command]
 pub async fn get_video_streams(video_id: String, cid: u64, cookies: String) -> Result<SimplifiedPlayUrlData, String> {
-    let client = reqwest::Client::new();
+    let client = crate::http::client();
     
     // B站视频流接口
     let url = format!(
@@ -71,7 +67,6 @@ pub async fn get_video_streams(video_id: String, cid: u64, cookies: String) -> R
     println!("Cookies长度: {}", cookies.len());
 
     let res = client.get(&url)
-        .header("User-Agent", USER_AGENT)
         .header("Cookie", cookies)
         .header("Referer", "https://www.bilibili.com/")
         .send()
@@ -150,7 +145,7 @@ pub async fn test_stream_url(url: String, cookies: String) -> Result<String, Str
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
-        .user_agent(USER_AGENT)
+        .user_agent(crate::http::USER_AGENT)
         .build()
         .map_err(|e| e.to_string())?;
 

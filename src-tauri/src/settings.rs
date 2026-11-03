@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -79,9 +78,15 @@ pub async fn set_download_dir(
     match path.map(|dir| dir.trim().to_string()).filter(|dir| !dir.is_empty()) {
         Some(dir) => {
             let dir_path = PathBuf::from(&dir);
-            fs::create_dir_all(&dir_path).map_err(|e| format!("创建下载目录失败: {}", e))?;
+            tokio::fs::create_dir_all(&dir_path)
+                .await
+                .map_err(|e| format!("创建下载目录失败: {}", e))?;
 
-            if !dir_path.is_dir() {
+            let is_dir = tokio::fs::metadata(&dir_path)
+                .await
+                .map(|metadata| metadata.is_dir())
+                .unwrap_or(false);
+            if !is_dir {
                 return Err(format!("所选路径不是文件夹: {}", dir));
             }
 
@@ -115,8 +120,15 @@ pub async fn select_download_folder(
         dialog = dialog.set_directory(dir);
     }
 
-    Ok(dialog
-        .blocking_pick_folder()
+    // 使用异步回调版本，避免在对话框打开期间阻塞 tokio 工作线程
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    dialog.pick_folder(move |folder| {
+        let _ = tx.send(folder);
+    });
+
+    let folder = rx.await.map_err(|e| e.to_string())?;
+
+    Ok(folder
         .and_then(|folder| folder.into_path().ok())
         .map(|folder| folder.to_string_lossy().to_string()))
 }
