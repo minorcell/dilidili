@@ -68,12 +68,18 @@ export default function TestPage() {
   const [checks, setChecks] = useState<CheckItem[]>(INITIAL_CHECKS);
   const [isRunning, setIsRunning] = useState(false);
   const [summary, setSummary] = useState<string>('');
-  const { isLoggedIn, cookies, downloads, userProfile } = useAppStore();
+  const isLoggedIn = useAppStore((state) => state.isLoggedIn);
+  const cookies = useAppStore((state) => state.cookies);
+  const userProfile = useAppStore((state) => state.userProfile);
+  const downloadCount = useAppStore((state) => state.downloads.length);
+  const activeCount = useAppStore(
+    (state) =>
+      state.downloads.filter(
+        (item) => item.status === 'pending' || item.status === 'downloading',
+      ).length,
+  );
 
   const tauriReady = isTauriAvailable();
-  const activeCount = downloads.filter(
-    (item) => item.status === 'pending' || item.status === 'downloading',
-  ).length;
 
   const updateCheck = (key: string, patch: Partial<CheckItem>) => {
     setChecks((prev) => prev.map((item) => (item.key === key ? { ...item, ...patch } : item)));
@@ -103,9 +109,9 @@ export default function TestPage() {
     updateCheck('tasks', {
       state: 'passed',
       detail:
-        downloads.length === 0
+        downloadCount === 0
           ? '还没有下载任务'
-          : `共 ${downloads.length} 个任务${activeCount > 0 ? `，${activeCount} 个正在进行` : ''}`,
+          : `共 ${downloadCount} 个任务${activeCount > 0 ? `，${activeCount} 个正在进行` : ''}`,
     });
   };
 
@@ -145,9 +151,9 @@ export default function TestPage() {
     updateCheck('tasks', {
       state: 'passed',
       detail:
-        downloads.length === 0
+        downloadCount === 0
           ? '还没有下载任务'
-          : `共 ${downloads.length} 个任务${activeCount > 0 ? `，${activeCount} 个正在进行` : ''}`,
+          : `共 ${downloadCount} 个任务${activeCount > 0 ? `，${activeCount} 个正在进行` : ''}`,
     });
 
     updateCheck('video', { state: 'running' });
@@ -336,7 +342,7 @@ export default function TestPage() {
               <div className="flex items-center justify-between gap-4 px-5 py-3">
                 <dt className="text-muted">下载任务</dt>
                 <dd className="font-medium text-fg">
-                  {downloads.length} 个{activeCount > 0 ? `，${activeCount} 个正在进行` : ''}
+                  {downloadCount} 个{activeCount > 0 ? `，${activeCount} 个正在进行` : ''}
                 </dd>
               </div>
             </dl>

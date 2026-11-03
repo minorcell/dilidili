@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import {
@@ -33,6 +33,7 @@ import CustomSelect from './ui/CustomSelect';
 import StatusLabel from './ui/StatusLabel';
 import { isTauriAvailable } from '../lib/tauri';
 import { userMessage } from '../lib/errors';
+import { thumbnailSrc } from '../lib/thumbnail';
 import { useMessage } from './ui/message-context';
 
 /** 获取文件所在目录，兼容 Windows 与 Unix 路径分隔符 */
@@ -95,6 +96,198 @@ function pickPreferredStream(
   return streams.find((stream) => keyword.test(stream.description)) ?? highest;
 }
 
+function renderStatusIcon(status: DownloadItem['status']) {
+  switch (status) {
+    case 'downloading':
+      return <Loader2 size={16} className="animate-spin text-accent-fg" aria-hidden="true" />;
+    case 'completed':
+      return <CheckCircle2 size={16} className="text-success-fg" aria-hidden="true" />;
+    case 'failed':
+      return <XCircle size={16} className="text-danger-fg" aria-hidden="true" />;
+    case 'cancelled':
+      return <Ban size={16} className="text-muted" aria-hidden="true" />;
+    default:
+      return <Clock size={16} className="text-muted" aria-hidden="true" />;
+  }
+}
+
+interface DownloadTaskRowProps {
+  item: DownloadItem;
+  onOpenFolder: (path: string) => void;
+  onConvert: (path: string, format: VideoFormat) => void;
+  onExtractAudio: (path: string, format: AudioFormat) => void;
+  onCancel: (item: DownloadItem) => void;
+  onRetry: (item: DownloadItem) => void;
+  onRemove: (id: string) => void;
+}
+
+/**
+ * 单个下载任务。列表最多会保留 200 条历史记录，只有进度变化的那一行
+ * 才会拿到新的 item 对象，因此这里用 item 引用做 memo，避免整张列表重渲染。
+ */
+const DownloadTaskRow = memo(function DownloadTaskRow({
+  item,
+  onOpenFolder,
+  onConvert,
+  onExtractAudio,
+  onCancel,
+  onRetry,
+  onRemove,
+}: DownloadTaskRowProps) {
+  const itemSize = formatSize(item.downloadSize);
+  const downloadedSize = formatSize(item.downloadedBytes);
+  const totalSize = formatSize(item.totalBytes || item.downloadSize);
+  const speedText =
+    item.status === 'downloading' ? formatSpeed(item.speedBytesPerSecond) : undefined;
+  const remainingText =
+    item.status === 'downloading' && item.speedBytesPerSecond && item.totalBytes
+      ? formatRemaining(
+          (item.totalBytes - (item.downloadedBytes ?? 0)) / item.speedBytesPerSecond,
+        )
+      : undefined;
+  const canRetry = Boolean(item.videoData && item.selectedQuality);
+  const thumbnail = thumbnailSrc(item.videoData?.pic || item.thumbnail);
+  const progressRatio = Math.min(1, Math.max(0, item.progress / 100));
+
+  return (
+    <li className="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-inset/60 sm:flex-row sm:items-center">
+      <div className="flex min-w-0 flex-1 gap-3.5">
+        {thumbnail && (
+          <img
+            src={thumbnail}
+            alt=""
+            width={112}
+            height={63}
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            className="hidden h-[63px] w-[112px] shrink-0 rounded-lg border border-line-muted object-cover sm:block"
+          />
+        )}
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="shrink-0">{renderStatusIcon(item.status)}</span>
+            <h3 className="truncate text-sm font-semibold text-fg">{item.title}</h3>
+            <StatusLabel status={item.status} />
+            {item.status === 'completed' && item.audioMerged === false && (
+              <span
+                title="声音没有合并成功，文件目前只有画面"
+                className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-attention-subtle px-2.5 py-1 text-[11px] font-medium leading-none text-attention-fg"
+              >
+                <VolumeX size={12} aria-hidden="true" />
+                无声音
+              </span>
+            )}
+          </div>
+
+          {item.uploader ? (
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-subtle-fg">
+              <span className="truncate">{item.uploader}</span>
+              {item.durationSeconds ? <span>{formatDuration(item.durationSeconds)}</span> : null}
+              {item.qualityLabel && (
+                <span className="rounded-full bg-inset px-2 py-0.5">{item.qualityLabel}</span>
+              )}
+              {itemSize && <span>约 {itemSize}</span>}
+            </p>
+          ) : (
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-subtle-fg">
+              <Link2 size={12} className="shrink-0" aria-hidden="true" />
+              <span className="truncate font-mono">{item.url}</span>
+              {item.qualityLabel && <span>{item.qualityLabel}</span>}
+              {itemSize && <span>约 {itemSize}</span>}
+            </p>
+          )}
+
+          {(item.status === 'downloading' || (item.status === 'failed' && item.progress > 0)) && (
+            <div className="mt-2.5 space-y-1.5">
+              <div className="flex items-center gap-2.5">
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-neutral-subtle">
+                  <div
+                    className="h-full w-full origin-left rounded-full bg-gradient-to-r from-[#fb7299] to-[#ff9db9] transition-transform duration-300"
+                    style={{ transform: `scaleX(${progressRatio})` }}
+                  />
+                </div>
+                <span className="w-10 text-right text-xs font-medium tabular-nums text-accent-fg">
+                  {item.progress}%
+                </span>
+              </div>
+              {(downloadedSize || totalSize || speedText || remainingText) && (
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-[11px] text-subtle-fg">
+                  <span>
+                    {downloadedSize
+                      ? totalSize
+                        ? `${downloadedSize} / ${totalSize}`
+                        : downloadedSize
+                      : null}
+                  </span>
+                  {item.status === 'downloading' && (speedText || remainingText) && (
+                    <span>
+                      {[speedText, remainingText ? `剩余 ${remainingText}` : undefined]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {item.status === 'completed' && item.filePath && (
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => onOpenFolder(parentDirectory(item.filePath!))}>
+                <FolderOpen size={12} aria-hidden="true" />
+                在文件夹中显示
+              </Button>
+              <ActionMenu
+                onOpenFolder={() => onOpenFolder(parentDirectory(item.filePath!))}
+                onConvert={(format) => onConvert(item.filePath!, format)}
+                onExtractAudio={(format) => onExtractAudio(item.filePath!, format)}
+              />
+              {item.audioMerged === false && canRetry && (
+                <Button size="sm" onClick={() => onRetry(item)}>
+                  <RotateCw size={12} aria-hidden="true" />
+                  重新下载
+                </Button>
+              )}
+            </div>
+          )}
+
+          {item.status === 'completed' && !item.filePath && (
+            <p className="mt-2 text-xs text-subtle-fg">文件已保存到下载目录。</p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center justify-end gap-2">
+        {item.status === 'downloading' && (
+          <Button size="sm" onClick={() => onCancel(item)}>
+            <X size={12} aria-hidden="true" />
+            取消
+          </Button>
+        )}
+        {(item.status === 'failed' || item.status === 'cancelled') && (
+          <Button size="sm" onClick={() => onRetry(item)}>
+            <RotateCw size={12} aria-hidden="true" />
+            重试
+          </Button>
+        )}
+        {item.status !== 'downloading' && (
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="移除任务"
+            title="移除任务"
+            onClick={() => onRemove(item.id)}
+          >
+            <Trash2 size={13} aria-hidden="true" />
+          </Button>
+        )}
+      </div>
+    </li>
+  );
+}, (prev, next) => prev.item === next.item);
+
 export default function Downloader() {
   const [videoUrl, setVideoUrl] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -102,20 +295,16 @@ export default function Downloader() {
   const [showQualitySelector, setShowQualitySelector] = useState(false);
   const [streamData, setStreamData] = useState<PlayUrlData | null>(null);
 
-  const {
-    downloads: downloadQueue,
-    addDownloadItem,
-    updateDownloadProgress,
-    updateDownloadStatus,
-    updateDownloadMetrics,
-    completeDownload,
-    removeDownloadItem,
-    clearCompleted,
-    qualityPreference,
-    autoOpenFolder,
-    isLoggedIn,
-    cookies,
-  } = useAppStore();
+  const downloadQueue = useAppStore((state) => state.downloads);
+  const addDownloadItem = useAppStore((state) => state.addDownloadItem);
+  const updateDownloadStats = useAppStore((state) => state.updateDownloadStats);
+  const updateDownloadStatus = useAppStore((state) => state.updateDownloadStatus);
+  const completeDownload = useAppStore((state) => state.completeDownload);
+  const removeDownloadItem = useAppStore((state) => state.removeDownloadItem);
+  const clearCompleted = useAppStore((state) => state.clearCompleted);
+  const qualityPreference = useAppStore((state) => state.qualityPreference);
+  const isLoggedIn = useAppStore((state) => state.isLoggedIn);
+  const cookies = useAppStore((state) => state.cookies);
   const { success, error, warning, info } = useMessage();
 
   // 记录已经自动开始过的任务，避免失败后无限重试
@@ -267,18 +456,40 @@ export default function Downloader() {
       return;
     }
 
-    if (!isLoggedIn || !cookies) {
+    // 重试按钮可能持有旧闭包，这里读取最新登录状态，避免使用过期 cookies
+    const { isLoggedIn: loggedIn, cookies: currentCookies } = useAppStore.getState();
+    if (!loggedIn || !currentCookies) {
       updateDownloadStatus(downloadItem.id, 'failed');
       warning('登录状态已失效，请重新登录。');
       return;
     }
 
     let unlisten: (() => void) | undefined;
+    let pendingStats: {
+      progress: number;
+      downloadedBytes: number;
+      totalBytes: number;
+      speedBytesPerSecond: number;
+    } | null = null;
+    let flushTimer: number | null = null;
+
+    // 后端可能瞬间推送多个进度事件，合并成约 10Hz 的界面更新
+    const flushStats = () => {
+      flushTimer = null;
+      if (!pendingStats) return;
+      const stats = pendingStats;
+      pendingStats = null;
+      updateDownloadStats(downloadItem.id, stats);
+    };
+    const scheduleFlush = () => {
+      if (flushTimer !== null) return;
+      flushTimer = window.setTimeout(flushStats, 100);
+    };
 
     try {
       updateDownloadStatus(downloadItem.id, 'downloading');
-      updateDownloadProgress(downloadItem.id, 0);
-      updateDownloadMetrics(downloadItem.id, {
+      updateDownloadStats(downloadItem.id, {
+        progress: 0,
         downloadedBytes: 0,
         totalBytes: downloadItem.downloadSize ?? 0,
         speedBytesPerSecond: 0,
@@ -302,19 +513,20 @@ export default function Downloader() {
         }
         speedSamples.current.set(downloadItem.id, { bytes: downloaded, time: now, speed });
 
-        updateDownloadProgress(downloadItem.id, Math.round(event.payload.progress));
-        updateDownloadMetrics(downloadItem.id, {
+        pendingStats = {
+          progress: Math.round(event.payload.progress),
           downloadedBytes: downloaded,
           totalBytes: total,
           speedBytesPerSecond: speed,
-        });
+        };
+        scheduleFlush();
       });
 
       const result = await invoke<DownloadResult>('download_video', {
         videoData: downloadItem.videoData,
         videoStream: downloadItem.selectedQuality.video,
         audioStream: downloadItem.selectedQuality.audio,
-        cookies,
+        cookies: currentCookies,
         downloadId: downloadItem.id,
       });
 
@@ -323,7 +535,7 @@ export default function Downloader() {
         audioMerged: result.has_audio,
       });
 
-      if (autoOpenFolder && result.file_path) {
+      if (useAppStore.getState().autoOpenFolder && result.file_path) {
         invoke('open_folder', { folderPath: parentDirectory(result.file_path) }).catch(
           (openError) => {
             console.error('下载完成后打开文件夹失败:', openError);
@@ -346,6 +558,11 @@ export default function Downloader() {
         error(userMessage(downloadError, '未能完成下载，请检查网络后重试。'), '下载失败');
       }
     } finally {
+      if (flushTimer !== null) {
+        window.clearTimeout(flushTimer);
+        flushTimer = null;
+      }
+      pendingStats = null;
       unlisten?.();
     }
   };
@@ -471,182 +688,38 @@ export default function Downloader() {
     setStreamData(null);
   };
 
-  const renderStatusIcon = (status: DownloadItem['status']) => {
-    switch (status) {
-      case 'downloading':
-        return <Loader2 size={16} className="animate-spin text-accent-fg" aria-hidden="true" />;
-      case 'completed':
-        return <CheckCircle2 size={16} className="text-success-fg" aria-hidden="true" />;
-      case 'failed':
-        return <XCircle size={16} className="text-danger-fg" aria-hidden="true" />;
-      case 'cancelled':
-        return <Ban size={16} className="text-muted" aria-hidden="true" />;
-      default:
-        return <Clock size={16} className="text-muted" aria-hidden="true" />;
-    }
-  };
-
-  const activeTasks = downloadQueue.filter(
-    (item) => item.status === 'pending' || item.status === 'downloading',
+  const activeTasks = useMemo(
+    () =>
+      downloadQueue.filter(
+        (item) => item.status === 'pending' || item.status === 'downloading',
+      ),
+    [downloadQueue],
   );
-  const finishedTasks = downloadQueue.filter(
-    (item) =>
-      item.status === 'completed' || item.status === 'failed' || item.status === 'cancelled',
+  const finishedTasks = useMemo(
+    () =>
+      downloadQueue.filter(
+        (item) =>
+          item.status === 'completed' || item.status === 'failed' || item.status === 'cancelled',
+      ),
+    [downloadQueue],
   );
-  const completedCount = downloadQueue.filter((item) => item.status === 'completed').length;
+  const completedCount = useMemo(
+    () => downloadQueue.filter((item) => item.status === 'completed').length,
+    [downloadQueue],
+  );
 
-  const renderTask = (item: DownloadItem) => {
-    const itemSize = formatSize(item.downloadSize);
-    const downloadedSize = formatSize(item.downloadedBytes);
-    const totalSize = formatSize(item.totalBytes || item.downloadSize);
-    const speedText =
-      item.status === 'downloading' ? formatSpeed(item.speedBytesPerSecond) : undefined;
-    const remainingText =
-      item.status === 'downloading' && item.speedBytesPerSecond && item.totalBytes
-        ? formatRemaining(
-            (item.totalBytes - (item.downloadedBytes ?? 0)) / item.speedBytesPerSecond,
-          )
-        : undefined;
-    const canRetry = Boolean(item.videoData && item.selectedQuality);
-
-    return (
-      <li
-        key={item.id}
-        className="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-inset/60 sm:flex-row sm:items-center"
-      >
-        <div className="flex min-w-0 flex-1 gap-3.5">
-          {(item.videoData?.pic || item.thumbnail) && (
-            <img
-              src={item.videoData?.pic || item.thumbnail}
-              alt=""
-              loading="lazy"
-              referrerPolicy="no-referrer"
-              className="hidden h-[63px] w-[112px] shrink-0 rounded-lg border border-line-muted object-cover sm:block"
-            />
-          )}
-
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="shrink-0">{renderStatusIcon(item.status)}</span>
-              <h3 className="truncate text-sm font-semibold text-fg">{item.title}</h3>
-              <StatusLabel status={item.status} />
-              {item.status === 'completed' && item.audioMerged === false && (
-                <span
-                  title="声音没有合并成功，文件目前只有画面"
-                  className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-attention-subtle px-2.5 py-1 text-[11px] font-medium leading-none text-attention-fg"
-                >
-                  <VolumeX size={12} aria-hidden="true" />
-                  无声音
-                </span>
-              )}
-            </div>
-
-            {item.uploader ? (
-              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-subtle-fg">
-                <span className="truncate">{item.uploader}</span>
-                {item.durationSeconds ? <span>{formatDuration(item.durationSeconds)}</span> : null}
-                {item.qualityLabel && (
-                  <span className="rounded-full bg-inset px-2 py-0.5">{item.qualityLabel}</span>
-                )}
-                {itemSize && <span>约 {itemSize}</span>}
-              </p>
-            ) : (
-              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-subtle-fg">
-                <Link2 size={12} className="shrink-0" aria-hidden="true" />
-                <span className="truncate font-mono">{item.url}</span>
-                {item.qualityLabel && <span>{item.qualityLabel}</span>}
-                {itemSize && <span>约 {itemSize}</span>}
-              </p>
-            )}
-
-            {(item.status === 'downloading' || (item.status === 'failed' && item.progress > 0)) && (
-              <div className="mt-2.5 space-y-1.5">
-                <div className="flex items-center gap-2.5">
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-neutral-subtle">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-[#fb7299] to-[#ff9db9] transition-[width] duration-300"
-                      style={{ width: `${Math.min(100, Math.max(0, item.progress))}%` }}
-                    />
-                  </div>
-                  <span className="w-10 text-right text-xs font-medium tabular-nums text-accent-fg">
-                    {item.progress}%
-                  </span>
-                </div>
-                {(downloadedSize || totalSize || speedText || remainingText) && (
-                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-[11px] text-subtle-fg">
-                    <span>
-                      {downloadedSize
-                        ? totalSize
-                          ? `${downloadedSize} / ${totalSize}`
-                          : downloadedSize
-                        : null}
-                    </span>
-                    {item.status === 'downloading' && (speedText || remainingText) && (
-                      <span>
-                        {[speedText, remainingText ? `剩余 ${remainingText}` : undefined]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {item.status === 'completed' && item.filePath && (
-              <div className="mt-2.5 flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => openFolder(parentDirectory(item.filePath!))}>
-                  <FolderOpen size={12} aria-hidden="true" />
-                  在文件夹中显示
-                </Button>
-                <ActionMenu
-                  onOpenFolder={() => openFolder(parentDirectory(item.filePath!))}
-                  onConvert={(format) => convertVideoFormat(item.filePath!, format)}
-                  onExtractAudio={(format) => extractAudio(item.filePath!, format)}
-                />
-                {item.audioMerged === false && canRetry && (
-                  <Button size="sm" onClick={() => retryDownload(item)}>
-                    <RotateCw size={12} aria-hidden="true" />
-                    重新下载
-                  </Button>
-                )}
-              </div>
-            )}
-
-            {item.status === 'completed' && !item.filePath && (
-              <p className="mt-2 text-xs text-subtle-fg">文件已保存到下载目录。</p>
-            )}
-          </div>
-        </div>
-
-        <div className="flex shrink-0 items-center justify-end gap-2">
-          {item.status === 'downloading' && (
-            <Button size="sm" onClick={() => cancelDownload(item)}>
-              <X size={12} aria-hidden="true" />
-              取消
-            </Button>
-          )}
-          {(item.status === 'failed' || item.status === 'cancelled') && (
-            <Button size="sm" onClick={() => retryDownload(item)}>
-              <RotateCw size={12} aria-hidden="true" />
-              重试
-            </Button>
-          )}
-          {item.status !== 'downloading' && (
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label="移除任务"
-              title="移除任务"
-              onClick={() => removeDownloadItem(item.id)}
-            >
-              <Trash2 size={13} aria-hidden="true" />
-            </Button>
-          )}
-        </div>
-      </li>
-    );
-  };
+  const renderRow = (item: DownloadItem) => (
+    <DownloadTaskRow
+      key={item.id}
+      item={item}
+      onOpenFolder={openFolder}
+      onConvert={convertVideoFormat}
+      onExtractAudio={extractAudio}
+      onCancel={cancelDownload}
+      onRetry={retryDownload}
+      onRemove={removeDownloadItem}
+    />
+  );
 
   return (
     <div className="flex h-full flex-col gap-4 p-6">
@@ -734,8 +807,10 @@ export default function Downloader() {
             <div className="space-y-5 p-5">
               <div className="flex flex-col gap-4 sm:flex-row">
                 <img
-                  src={currentVideoData.pic}
+                  src={thumbnailSrc(currentVideoData.pic, 352, 192)}
                   alt={currentVideoData.title}
+                  loading="lazy"
+                  decoding="async"
                   referrerPolicy="no-referrer"
                   className="h-28 w-full shrink-0 rounded-xl border border-line-muted object-cover sm:h-24 sm:w-44"
                 />
@@ -804,17 +879,17 @@ export default function Downloader() {
           <div className="custom-scrollbar flex-1 overflow-y-auto">
             {activeTasks.length > 0 && (
               <section>
-                <h3 className="sticky top-0 z-10 flex items-center gap-1.5 border-b border-line-muted bg-canvas/95 px-5 py-2.5 text-xs font-semibold text-muted backdrop-blur">
+                <h3 className="sticky top-0 z-10 flex items-center gap-1.5 border-b border-line-muted bg-canvas px-5 py-2.5 text-xs font-semibold text-muted">
                   进行中
                   <span className="font-normal">({activeTasks.length})</span>
                 </h3>
-                <ul className="divide-y divide-line-muted">{activeTasks.map(renderTask)}</ul>
+                <ul className="divide-y divide-line-muted">{activeTasks.map(renderRow)}</ul>
               </section>
             )}
 
             {finishedTasks.length > 0 && (
               <section>
-                <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line-muted bg-canvas/95 px-5 py-2.5 backdrop-blur">
+                <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line-muted bg-canvas px-5 py-2.5">
                   <h3 className="flex items-center gap-1.5 text-xs font-semibold text-muted">
                     已结束
                     <span className="font-normal">({finishedTasks.length})</span>
@@ -829,7 +904,7 @@ export default function Downloader() {
                     </button>
                   )}
                 </div>
-                <ul className="divide-y divide-line-muted">{finishedTasks.map(renderTask)}</ul>
+                <ul className="divide-y divide-line-muted">{finishedTasks.map(renderRow)}</ul>
               </section>
             )}
           </div>

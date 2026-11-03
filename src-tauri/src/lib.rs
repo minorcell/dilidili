@@ -1,4 +1,5 @@
 mod types;
+mod http;
 mod auth;
 mod video;
 mod download;

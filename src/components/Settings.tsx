@@ -13,18 +13,16 @@ import CustomSelect from './ui/CustomSelect';
 import { useMessage } from './ui/message-context';
 
 export default function Settings() {
-  const {
-    downloadDir,
-    isDownloadDirDefault,
-    setDownloadDir,
-    userProfile,
-    isLoggedIn,
-    logout,
-    qualityPreference,
-    autoOpenFolder,
-    setQualityPreference,
-    setAutoOpenFolder,
-  } = useAppStore();
+  const downloadDir = useAppStore((state) => state.downloadDir);
+  const isDownloadDirDefault = useAppStore((state) => state.isDownloadDirDefault);
+  const setDownloadDir = useAppStore((state) => state.setDownloadDir);
+  const userProfile = useAppStore((state) => state.userProfile);
+  const isLoggedIn = useAppStore((state) => state.isLoggedIn);
+  const logout = useAppStore((state) => state.logout);
+  const qualityPreference = useAppStore((state) => state.qualityPreference);
+  const autoOpenFolder = useAppStore((state) => state.autoOpenFolder);
+  const setQualityPreference = useAppStore((state) => state.setQualityPreference);
+  const setAutoOpenFolder = useAppStore((state) => state.setAutoOpenFolder);
   const { success, error, warning } = useMessage();
   const [isPicking, setIsPicking] = useState(false);
   const [isResetting, setIsResetting] = useState(false);

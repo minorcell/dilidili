@@ -155,11 +155,17 @@ function Welcome() {
 }
 
 function App() {
-  const { isLoggedIn, loadLoginData, loadSettings, downloads } = useAppStore();
+  const isLoggedIn = useAppStore((state) => state.isLoggedIn);
+  const loadLoginData = useAppStore((state) => state.loadLoginData);
+  const loadSettings = useAppStore((state) => state.loadSettings);
+  // 只订阅「进行中的任务数」，下载进度变化不会让整个应用重新渲染
+  const activeDownloads = useAppStore(
+    (state) =>
+      state.downloads.filter(
+        (item) => item.status === 'pending' || item.status === 'downloading',
+      ).length,
+  );
   const [page, setPage] = useState<Page>('download');
-  const activeDownloads = downloads.filter(
-    (item) => item.status === 'pending' || item.status === 'downloading',
-  ).length;
 
   useSystemTheme();
 
